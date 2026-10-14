@@ -1,0 +1,588 @@
+{
+  "purpose": "Preservation only; no upstream upgrade or production rollout",
+  "snapshot_date": "2026-10-15",
+  "snapshots": [
+    {
+      "host": "press",
+      "repository": "press",
+      "branch": "preserve/2026-10-15/press",
+      "upstream_base": "4189e8ef35379418c9f4db50171857aa10afcde1",
+      "commit": "36e35036964b795de91c52b69af3704111aec711",
+      "tree": "c8d16495284f0a0211c49f06a65a61740cf42b8b",
+      "captured_at_utc": "2026-10-14T21:02:28.115393+00:00",
+      "paths": 95,
+      "source_files": [
+        {
+          "path": "dashboard/auto-imports.d.ts",
+          "mode": "100644",
+          "sha256": "b2b1592e69257d8a7af348d7326918b7d3188ac8e72a70e717e048e3addebb31",
+          "deleted": false
+        },
+        {
+          "path": "dashboard/src/components/SiteDailyUsage.vue",
+          "mode": "100644",
+          "sha256": "ce50d81812b51127de1fb28f8e04ae103bae9d3af073ee342b8c0be20a7251c8",
+          "deleted": false
+        },
+        {
+          "path": "dashboard/src/components/navigation/sidebar/Sidebar.vue",
+          "mode": "100644",
+          "sha256": "0c7de2563bee8d5709a66c166558aa4d1b82db73179be737f9e84c0343961968",
+          "deleted": false
+        },
+        {
+          "path": "dashboard/src/components/site/SiteAnalytics.vue",
+          "mode": "100644",
+          "sha256": "5664a2e50be129a4d4f5174e2ec3d05a1518e51527db9b64c085ec7be61e48e4",
+          "deleted": false
+        },
+        {
+          "path": "dashboard/src/pages/NewSite.vue",
+          "mode": "100644",
+          "sha256": "a1032ee62d3833d3c682a3b54a920b0b6068167d8a8a0f66640097014c2b9d89",
+          "deleted": false
+        },
+        {
+          "path": "dashboard/src/pages/NewSite.vue.bak-domain-selector-20260731-213354",
+          "mode": "100644",
+          "sha256": "f0121e9e8848402f55839c48600c1034107bc4dfeb0059bda02f00bee3e5cc4b",
+          "deleted": false
+        },
+        {
+          "path": "dashboard/src/utils/dayjs.js",
+          "mode": "100644",
+          "sha256": "638ca467cc4867c1c1b6be94e0d8067e28b3acd8583a13f709c043de20754d8b",
+          "deleted": false
+        },
+        {
+          "path": "press/agent.py",
+          "mode": "100644",
+          "sha256": "1fc7a23a6f4ff93b054a37c3746823f31d7bda16121bbe41f46f2860088123f1",
+          "deleted": false
+        },
+        {
+          "path": "press/agent.py.bak-codex-20260810-incomplete-cert-guard",
+          "mode": "100644",
+          "sha256": "ea1accd162818f8d2a8accf90489342c3a067533e214b720561a139c03bf49b8",
+          "deleted": false
+        },
+        {
+          "path": "press/agent.py.bak-proxy-upstream-ip-20260617-192922",
+          "mode": "100644",
+          "sha256": "dd07514346c429fcbc96c1549fc85840ebc472e9d774c25234718f0a63179111",
+          "deleted": false
+        },
+        {
+          "path": "press/ansible_bridge.py",
+          "mode": "100644",
+          "sha256": "b57ed150ca4adcb779ad2b92e826b862f07edcb576778fdce1863b58560813f9",
+          "deleted": false
+        },
+        {
+          "path": "press/api/analytics.py",
+          "mode": "100644",
+          "sha256": "eb38ec284b5f624d1021829a8ea8a5f4047707a7590b928f2f6d3f19c6184468",
+          "deleted": false
+        },
+        {
+          "path": "press/api/helpdesk_options.py",
+          "mode": "100644",
+          "sha256": "a3fff7d70d68d7959fa79a6aa86dccb555ed65f0f539fae99f689efdaceb8436",
+          "deleted": false
+        },
+        {
+          "path": "press/api/monitoring.py",
+          "mode": "100644",
+          "sha256": "e7d62387bbf8464a13e8097f5faa33aed1aa42a14c8b8f8fda9b34e8d72e70d8",
+          "deleted": false
+        },
+        {
+          "path": "press/api/monitoring.py.bak-self-hosted-monitoring-20260717",
+          "mode": "100644",
+          "sha256": "0f98cc9a34886f71ca101fc50dd81c1258783071a72cf8f675639e13d9973f5f",
+          "deleted": false
+        },
+        {
+          "path": "press/api/site.py",
+          "mode": "100644",
+          "sha256": "6e44164e3d587ae59df5737dc60c3c297a9da3c7116353711700febdfb73837e",
+          "deleted": false
+        },
+        {
+          "path": "press/api/site.py.bak-20260519-141144",
+          "mode": "100644",
+          "sha256": "19847d0603f43463e4c39a07b066e5e49ee0c5361b5d7ba6a25cc0837228d7fb",
+          "deleted": false
+        },
+        {
+          "path": "press/api/site.py.bak-domain-selector-20260731-213354",
+          "mode": "100644",
+          "sha256": "a0a39c6352fd0564ec65638f93742c07d07f8ba4c8613e0f91d05175c77fdd95",
+          "deleted": false
+        },
+        {
+          "path": "press/api/site.py.bak-upload-endpoint-20260618-1343",
+          "mode": "100644",
+          "sha256": "4ffed1fbc836d8a25459528f2f916496c38d77165805c9a8bdab080665df2905",
+          "deleted": false
+        },
+        {
+          "path": "press/api/site.py.bak-upload-endpoint-20260618-1915",
+          "mode": "100644",
+          "sha256": "4ffed1fbc836d8a25459528f2f916496c38d77165805c9a8bdab080665df2905",
+          "deleted": false
+        },
+        {
+          "path": "press/docker/Dockerfile",
+          "mode": "100644",
+          "sha256": "b815f54ff0d43134936870645deed9e5455edd4ea8c58d1e14ff282236e7b9c0",
+          "deleted": false
+        },
+        {
+          "path": "press/docker/Dockerfile.bak-deadsnakes-direct-20260818141210",
+          "mode": "100644",
+          "sha256": "9c39558bf53d771cf1f9ada220c8500506cac50e1fb8ec82c2190ef90512ba43",
+          "deleted": false
+        },
+        {
+          "path": "press/docker/config/supervisor.conf",
+          "mode": "100644",
+          "sha256": "125e94f990e601d8c90d3fb5627dc22b30e40b3e537482259275149683b005a8",
+          "deleted": false
+        },
+        {
+          "path": "press/docker/config/supervisor.conf.bak-codex-codeserver-source-20260805",
+          "mode": "100644",
+          "sha256": "5c481124c0b21a6d6951f2290a3812c85e83515ebfa0a98ce781f6126c1b01b6",
+          "deleted": false
+        },
+        {
+          "path": "press/hooks.py",
+          "mode": "100644",
+          "sha256": "b411ce4ccc23f994a131395d9de0ed2440de5b7004dbd370d87648122c0e4c5a",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/files/agent-code-server-runtime-autostart.patch",
+          "mode": "100644",
+          "sha256": "631c623a8742cc865a10c86fceff849310d70d206d6f0973427d4e7181c59d88",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/files/agent-site-s3-endpoint.patch",
+          "mode": "100644",
+          "sha256": "cc199c0bfdb2f4e21f1098c76e7a633868aea38d71257a539a96169d20453339",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/agent/tasks/main.yml",
+          "mode": "100644",
+          "sha256": "b6b45a7d16f3818a300ea958463e872fa5802a9327ca941a43487944ad9ba264",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/agent/tasks/main.yml.bak-codex-codeserver-source-20260805",
+          "mode": "100644",
+          "sha256": "789085fdc681c8ad9007f9abe96655b5c52a32414a29ce4c4ac3bd70cdd0a63f",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/agent/tasks/main.yml.bak-remote-src-20260719",
+          "mode": "100644",
+          "sha256": "ad4bffeb45adb77911823a83e25e7968d804461b971e573d7084aaab251e470b",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/agent/tasks/main.yml.bak-s3-endpoint-20260714",
+          "mode": "100644",
+          "sha256": "6b8d2f38ada7c867682cc3936edb0ca9b8cf7abc88e0bc807bfa443c7a57a9dd",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/blackbox_exporter/templates/blackbox.yml",
+          "mode": "100644",
+          "sha256": "f75bc86bc7ebd08fdd27ba24830f5805451cadfcddb7377e985c886084f5233b",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/docker/tasks/main.yml",
+          "mode": "100644",
+          "sha256": "322888506244f2e1546b056541a095b07ea1f2f38771b5dda07b6ec70e31874e",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/docker/tasks/main.yml.bak-agent-docker-group-20260719",
+          "mode": "100644",
+          "sha256": "a3b7c5c55bfdaaa37b0ad84eef6cb8ee918d5ce41a0c292358cbc5179bbdaf91",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/essentials/tasks/main.yml",
+          "mode": "100644",
+          "sha256": "8b77b6c1bb77130e211996a1b47c0bb9d33f19a6c67a7bc3359b45e9d5488c63",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/prometheus/templates/prometheus.yml",
+          "mode": "100644",
+          "sha256": "87c7369ff21d8c21f72611898b600af52ff3ad4e8120d3971389622ea3620397",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/registry/files/registry-docker-compose.yml.j2",
+          "mode": "100644",
+          "sha256": "b8ba43af5d25b980c36939dc2f88614f778702833dbc77c10bd46f73a54b54a1",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/ssh_proxy/tasks/main.yml",
+          "mode": "100644",
+          "sha256": "19e1441e06c4020a379fbd1fb9e5864a4fdee26531b0994d4716be6fab27974f",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/ssh_proxy/tasks/main.yml.bak-codex-apparmor-20260727",
+          "mode": "100644",
+          "sha256": "0559db5f612192063e7ac33d4072702db78abbbd76eb41e02a39d22ea2117a61",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/update_agent/tasks/main.yml",
+          "mode": "100644",
+          "sha256": "77133e9efb957cbfda5f8a1c944bd7a2006798ab2272658fc910318c13ad55c4",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/update_agent/tasks/main.yml.bak-codex-codeserver-source-20260805",
+          "mode": "100644",
+          "sha256": "2b5319c4d8060919791bde31214f4ce24a33b21b8b37c91ffa48d2203a1abe12",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/update_agent/tasks/main.yml.bak-remote-src-20260719",
+          "mode": "100644",
+          "sha256": "df33d8a4f265f4c10969d10ceb6329423ff2b0b9c25c1dfd0c2b2894bb1ce9b2",
+          "deleted": false
+        },
+        {
+          "path": "press/playbooks/roles/update_agent/tasks/main.yml.bak-s3-endpoint-20260714",
+          "mode": "100644",
+          "sha256": "aef60cd484ea67443d3f29bacbdb09b156632e3d41c5620284dc154fc35139a9",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/app_release/app_release.py",
+          "mode": "100644",
+          "sha256": "1f925234079a411b8c81d757f9f2e11ddfdcb47da4086844d87735b26d7285ef",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/app_release/app_release.py.bak-20260521-232503",
+          "mode": "100644",
+          "sha256": "37de8639b54e2632d5d9c38b36149c4c13395cab33b5f18b9a48159ed8cae971",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/cloud_region/cloud_region.json",
+          "mode": "100644",
+          "sha256": "d29b39756df0aa387a43efa936ed3698b46860296e7ff9702f6a9af40c8dc4f4",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/cloud_region/cloud_region.py",
+          "mode": "100644",
+          "sha256": "9623c8822b3020e2d61e3a249808cc14f82ee52a939216e2c0ffb07325f6d718",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/cluster/cluster.json",
+          "mode": "100644",
+          "sha256": "b7acf988ce8dc1dd34012a1c07a9fb1d48e76ba9502422d16be54d50fab04faa",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/cluster/cluster.py",
+          "mode": "100644",
+          "sha256": "9aa4c18acbaaf600ed147ae6b1fe357dbb040e5089e2fbd118089ec1e3a86163",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/code_server/code_server.js",
+          "mode": "100644",
+          "sha256": "b66c34011c2e39918f7c08a6770c1dcf4ebfe66d38a5e64f4fe3b6b4b8a41eca",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/code_server/code_server.js.bak-show-password-20260727",
+          "mode": "100644",
+          "sha256": "bb3a4700f457266a92958b565592613a8f5513621e4ccd2df351ad4647c18142",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/code_server/code_server.py",
+          "mode": "100644",
+          "sha256": "a041b85a386017103e49869ba58b1784b9d3c96049266cc35a5f0f7371d1f73b",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/code_server/code_server.py.bak-show-password-20260727",
+          "mode": "100644",
+          "sha256": "a85e421443afde9f2f39a9fc575f0c3e985d8d7d437fe7a296bee6bebdfa0350",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/code_server/code_server.py.bak-show-passworod-alias-20260727",
+          "mode": "100644",
+          "sha256": "f3508bc1ef794c1011e0d9361a38470f314fb01c68de0434631dd71fae2bc597",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/deploy_candidate_build/deploy_candidate_build.py",
+          "mode": "100644",
+          "sha256": "6f0ff556e998071726842074f6a3d60652926b1b57ca499de8ee822c19b1aac0",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/deploy_candidate_build/deploy_candidate_build.py.bak-progress-20261005",
+          "mode": "100644",
+          "sha256": "ff0b7c93585c0a17dc1a25f2540be35abe5a0c696d1e5c56064a8b3c3520d8a2",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/monitor_server/monitor_server.py",
+          "mode": "100644",
+          "sha256": "93f54353daf055b29ae93e393453a81775ea0359add44f6dfb56cbdd7792533a",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/proxy_server/proxy_server.json",
+          "mode": "100644",
+          "sha256": "b1f42c4a3a7ef30a754de270d5333bd329050b3572c68a3ee80d9967905173a8",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/proxy_server/proxy_server.py",
+          "mode": "100644",
+          "sha256": "aa60c000c65e74303d5dae02632e26b98343681aff175a2bc24e53ccd77fc7c7",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/release_group/release_group.py",
+          "mode": "100644",
+          "sha256": "35684c9872e8621100a3f922502a2734a13e36ac5bf48236fb8fc07fe097157b",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/remote_file/remote_file.py",
+          "mode": "100644",
+          "sha256": "c3c56f895a2ec0ac2e5a499bc65a03449fb64f56d67c5bf10b352a008ede3b3e",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/remote_file/remote_file.py.bak-20260516-094315",
+          "mode": "100644",
+          "sha256": "f1394104f0b22bd4bdfbf441810bc9d06fea8e199401674e893e7e1f70828059",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/root_domain/root_domain.py",
+          "mode": "100644",
+          "sha256": "fac0bd4f35db1df89ad733b614f3a4b7794834e9713ff94cea137898bb945b39",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/root_domain/root_domain.py.bak-20260519-141144",
+          "mode": "100644",
+          "sha256": "127809515edff6661234e411f59571463e86bbc12a94233abfa0a5f8027b9e4b",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/root_domain/root_domain.py.bak-codex-20260728-codeserver-dns",
+          "mode": "100644",
+          "sha256": "a01d829b2344d240bb509821c37e1ff11070368003cce2995ccd7ecf44fd3a33",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/root_domain/root_domain.py.bak-domain-selector-20260731-213354",
+          "mode": "100644",
+          "sha256": "d7042b6aacf673791fc8cfa3449f0a58c2654a7d2b9df2a1d563a24f01d1c90e",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/root_domain/root_domain.py.bak-pxpand-dns-cleanup-20260715",
+          "mode": "100644",
+          "sha256": "7e65bde571812eadeed6360c5344bf91d9ec7c35691441c86098271880923933",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/server/server.json",
+          "mode": "100644",
+          "sha256": "41961801384e4d0385ba1000d054ede7e635b459781da65f07cb85e2d8500ddc",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/server/server.py",
+          "mode": "100644",
+          "sha256": "98c379eb01d73efe607b68ccc922af8a424124c5f3c45e65db15143280bd3d44",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/server/server.py.bak-standalone-wildcard-renewal-20260828",
+          "mode": "100644",
+          "sha256": "9ee62fe867e1520628f233f858a1eebd1bb5debe36c3931826cf00b3538ec8f0",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site/site.py",
+          "mode": "100644",
+          "sha256": "7b5924ed390624c137418084ba9dd3681ca5c0779a9936cddec16924fc7085f6",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site/site.py.bak-20260519-141144",
+          "mode": "100644",
+          "sha256": "c92767e0f0ed3cc0aa4c7e30cb7e23fc2649b91b90030c55a200511c6e1baa04",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site/site.py.bak-domain-selector-20260731-213354",
+          "mode": "100644",
+          "sha256": "3085aca3929b26c8883540ef52c898ed35bdb5a8c65e10c52bb5f701a87babad",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site/site.py.bak-standalone-dns-rename-20260710-224501",
+          "mode": "100644",
+          "sha256": "8a2411ceab7b7831ded6260837b608d3c0ed5553e2061d4ab1c9404dbdb7b4c8",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site/site.py.bak-standalone-rename-20260710-223215",
+          "mode": "100644",
+          "sha256": "9c7a80f67db9801098f26a9140e1cde7697ccf1944f1b5b815e20617d8ebe972",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site_backup/site_backup.py",
+          "mode": "100644",
+          "sha256": "a216c3c8d8f1ecca1c683887a3898c15b6283b48ba4b13b4f676944059d62fa2",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site_backup/site_backup.py.bak-unicloudbackups-20260714",
+          "mode": "100644",
+          "sha256": "780c0903267c51cfc4be459e4c4fba70d8fd563c63881be152b768e794b5b34e",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site_domain/site_domain.py",
+          "mode": "100644",
+          "sha256": "b694ad0456aac2c2064f61c1c6acc3360ad16c9d5fe35d17ca12ab326209349d",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site_domain/site_domain.py.bak-codex-20260810-edge-redirect-guard",
+          "mode": "100644",
+          "sha256": "bf5f14dd1bda1530b8cb6cbe157c0accd173dcd35d92bea1042e88ec21f2abed",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site_group_deploy/site_group_deploy.py",
+          "mode": "100644",
+          "sha256": "469026ce3bd1780b49dd307b2e636707bea5e39642dc57d551893f644d45156a",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/site_group_deploy/site_group_deploy.py.bak-20260519-141144",
+          "mode": "100644",
+          "sha256": "6a3f6078b72309d6782a556e3e4006c4eeeae28df5029d05e86d7247909af63f",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/team/team.py",
+          "mode": "100644",
+          "sha256": "5d1cdeb50eb946697b4c73ac945f9f55352d67fd7592289ca23bbf960274473e",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/tls_certificate/tls_certificate.py",
+          "mode": "100644",
+          "sha256": "b6830c77df8bd9c74113f9429b1fb6ae9dcdca5b7f554188dbf0d27c1aad9a25",
+          "deleted": false
+        },
+        {
+          "path": "press/press/doctype/tls_certificate/tls_certificate.py.bak-http01-20260719",
+          "mode": "100644",
+          "sha256": "ffd0e30966ef82e6e055c2c9d5fd5645fafcd501a1deedb8ffe2f55b5024dd12",
+          "deleted": false
+        },
+        {
+          "path": "press/runner.py",
+          "mode": "100644",
+          "sha256": "a495d078edaf4047d599b94e7a4fb527700293ff514dd3a4fac59fe991f60642",
+          "deleted": false
+        },
+        {
+          "path": "press/runner.py.bak-20260615-approach3",
+          "mode": "100644",
+          "sha256": "bf684d29b935a310aa57aacd8b2a7c1edbce8f96bf247d6482da98e5b62f0f68",
+          "deleted": false
+        },
+        {
+          "path": "press/runner.py.bak-f21-setup-20260710-ansible-msg-list",
+          "mode": "100644",
+          "sha256": "e7f354295b1d208c43d975c118f30fa85bbf40dec583538d4999350b88b5ebd4",
+          "deleted": false
+        },
+        {
+          "path": "press/scripts/ansible_bridge.py",
+          "mode": "100644",
+          "sha256": "db41e2a93cd380545481babd432e29bf7534f0c8330057b3ce1066eaac30984c",
+          "deleted": false
+        },
+        {
+          "path": "press/scripts/ansible_bridge.py.bak-f21-nat-none-20260710",
+          "mode": "100644",
+          "sha256": "b57ed150ca4adcb779ad2b92e826b862f07edcb576778fdce1863b58560813f9",
+          "deleted": false
+        },
+        {
+          "path": "press/scripts/ansible_bridge.py.bak-timeout-20260710",
+          "mode": "100644",
+          "sha256": "df994e66a01daf86ec3f2520d7496cb945d2901d075d5b0e2248233307dc08b8",
+          "deleted": false
+        },
+        {
+          "path": "press/utils/billing.py",
+          "mode": "100644",
+          "sha256": "6fcd2a4a79a637080f2e6ce7c6b15fc5f1ce1a01b21552bf872598c41157436d",
+          "deleted": false
+        },
+        {
+          "path": "press/utils/dns.py",
+          "mode": "100644",
+          "sha256": "d7f30c1aa8ffc339d33c5704084ce7a2329bb914fddb61cecae6ef41d50fb356",
+          "deleted": false
+        },
+        {
+          "path": "press/utils/dns.py.bak-self-hosted-cname-20260716",
+          "mode": "100644",
+          "sha256": "800b5e2ee0e861d13ccc104858f08cebe15f5d5d21190cafb2ef08b8457e4e3d",
+          "deleted": false
+        },
+        {
+          "path": "press/www/dashboard.py",
+          "mode": "100644",
+          "sha256": "f98bc409a8b97a53e6f77a5c074383352382e4ad2ad24a9de6799e02e30f45fb",
+          "deleted": false
+        },
+        {
+          "path": "press/www/github/authorize.py",
+          "mode": "100644",
+          "sha256": "476d20b964a5fd3aa6bfab450874288456a17e30425b595f62365f58a3a6cc87",
+          "deleted": false
+        }
+      ]
+    }
+  ]
+}
