@@ -5,6 +5,8 @@ from __future__ import annotations
 import frappe
 from frappe.model.document import Document
 
+from press.press.doctype.root_domain.root_domain import get_default_domain_for_team
+
 
 class SiteGroupDeploy(Document):
 	# begin: auto-generated types
@@ -76,7 +78,7 @@ class SiteGroupDeploy(Document):
 		if frappe.db.exists("Release Group", {"title": self.subdomain}):
 			frappe.throw(f"Release Group with title {self.subdomain} already exists")
 
-		domain = frappe.db.get_single_value("Press Settings", "domain")
+		domain = get_default_domain_for_team(self.team)
 		if Site.exists(self.subdomain, domain):
 			frappe.throw(f"Site with subdomain {self.subdomain} already exists")
 
@@ -148,7 +150,7 @@ class SiteGroupDeploy(Document):
 					"cluster": self.cluster,
 					"release_group": self.release_group,
 					"bench": self.bench,
-					"domain": frappe.db.get_single_value("Press Settings", "domain"),
+					"domain": get_default_domain_for_team(self.team),
 					"subscription_plan": site_plan,
 					"app_plans": app_plan_map,
 				}

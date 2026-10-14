@@ -288,7 +288,7 @@
    "fieldname": "provider",
    "fieldtype": "Select",
    "label": "Provider",
-   "options": "Generic\nScaleway\nAWS EC2\nOCI\nHetzner\nVodacom\nDigitalOcean\nFrappe Compute",
+   "options": "Generic\nScaleway\nAWS EC2\nOCI\nHetzner\nVodacom\nDigitalOcean\nFrappe Compute\nNayatelCloud\nUniCloud",
    "set_only_once": 1
   },
   {
@@ -778,8 +778,8 @@
    "link_fieldname": "app_server"
   }
  ],
- "modified": "2026-05-02 14:54:47.079941",
- "modified_by": "Administrator",
+ "modified": "2026-07-19 01:28:15.427627",
+ "modified_by": "nasir@univenturesgroup.com",
  "module": "Press",
  "name": "Server",
  "owner": "Administrator",

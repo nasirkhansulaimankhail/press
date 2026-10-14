@@ -14,10 +14,10 @@
 	</div>
 
 	<div v-else class="mx-auto max-w-2xl px-5">
-		<div v-if="$resources.options.loading" class="py-4 text-base text-ink-gray-6">
+		<div v-if="!options" class="py-4 text-base text-ink-gray-6">
 			Loading...
 		</div>
-		<div v-if="$route.name === 'NewBenchSite' && !bench">
+		<div v-else-if="$route.name === 'NewBenchSite' && !bench">
 			<div class="py-4 text-base text-ink-gray-6">Something went wrong</div>
 		</div>
 		<div v-else-if="options" class="space-y-12 pb-[50vh] pt-12">
@@ -280,11 +280,19 @@
 						Enter Subdomain
 					</h2>
 					<Tooltip
-						v-if="this.domain !== this.options.domain"
+						v-if="this.domain !== this.options?.domain"
 						text="The root domain can change depending on the region you choose"
 					>
 						<lucide-help-circle class="h-4 w-4 text-ink-gray-5" />
 					</Tooltip>
+				</div>
+				<div v-if="availableDomains.length > 1" class="mt-3">
+					<FormControl
+						type="select"
+						label="Domain"
+						:options="availableDomains.map((domain) => ({ label: domain, value: domain }))"
+						v-model="selectedDomain"
+					/>
 				</div>
 				<div class="mt-2 items-center">
 					<div class="col-span-2 flex w-full">
@@ -422,6 +430,8 @@ export default {
 			agreedToRegionConsent: false,
 			useDedicatedServer: false,
 			selectedDedicatedServer: null,
+			selectedDomain: null,
+			optionsData: null,
 			serverPriceUsd: null,
 		};
 	},
@@ -506,6 +516,11 @@ export default {
 				this.serverPriceUsd = server.price_usd;
 			}
 		},
+		availableDomains() {
+			if (!this.availableDomains.includes(this.selectedDomain)) {
+				this.selectedDomain = this.availableDomains[0] || null;
+			}
+		},
 		subdomain: {
 			handler: debounce(function (value) {
 				let invalidMessage = validateSubdomain(value);
@@ -523,10 +538,11 @@ export default {
 				makeParams() {
 					return { for_bench: this.bench, for_server: this.server };
 				},
-				onSuccess() {
-					this.closestCluster = this.options.closest_cluster;
-					if (this.bench && this.options.versions.length > 0) {
-						this.version = this.options.versions[0].name;
+				onSuccess(data) {
+					this.optionsData = data;
+					this.closestCluster = data.closest_cluster;
+					if (this.bench && data.versions.length > 0) {
+						this.version = data.versions[0].name;
 					}
 					this.applyDedicatedServerDefaults();
 				},
@@ -673,14 +689,25 @@ export default {
 	},
 	computed: {
 		options() {
-			return this.$resources.options.data;
+			return this.optionsData;
 		},
 		domain() {
-			return (
-				this.options?.cluster_specific_root_domains?.find(
-					(d) => d.cluster === this.cluster,
-				)?.name || this.options?.domain
+			return this.selectedDomain || this.availableDomains[0] || null;
+		},
+		availableDomains() {
+			const rootDomains = this.options?.available_root_domains || [];
+			const selectedServer = this.availableDedicatedServers.find(
+				(server) => server.name === this.selectedDedicatedServer,
 			);
+			return rootDomains
+				.filter((domain) => {
+					if (selectedServer?.proxy_server) {
+						return domain.proxy_servers?.includes(selectedServer.proxy_server);
+					}
+					return domain.clusters?.includes(this.cluster);
+				})
+				.map((domain) => domain.name)
+				.sort();
 		},
 		selectedVersion() {
 			return this.options?.versions.find((v) => v.name === this.version);
@@ -739,7 +766,7 @@ export default {
 		selectedClusterTitle() {
 			const allClusters = [
 				...(this.selectedVersion?.group?.clusters || []),
-				...(this.options.additional_clusters || []),
+				...(this.options?.additional_clusters || []),
 			];
 			return allClusters.find((c) => c.name === this.cluster)?.title;
 		},

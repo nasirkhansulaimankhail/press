@@ -2515,13 +2515,25 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 
 	def get_wildcard_domains(self):
 		wildcard_domains = []
-		for domain in self.domains:
+		if self.doctype == "Server" and self.is_standalone_setup:
+			domains = frappe.get_all(
+				"Site",
+				filters={"status": ("!=", "Archived"), "server": self.name},
+				fields=["domain"],
+				distinct=True,
+			)
+		else:
+			domains = self.domains
+
+		for domain in domains:
 			if domain.domain == self.domain and self.doctype == "Proxy Server":
 				# self.domain certs are symlinks
 				continue
 			certificate_name = frappe.db.get_value(
 				"TLS Certificate", {"wildcard": True, "domain": domain.domain}, "name"
 			)
+			if not certificate_name:
+				continue
 
 			certificate: TLSCertificate = frappe.get_doc("TLS Certificate", certificate_name)
 			if not (certificate.private_key and certificate.full_chain and certificate.intermediate_chain):
@@ -2535,7 +2547,7 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 						"fullchain.pem": certificate.full_chain,
 						"chain.pem": certificate.intermediate_chain,
 					},
-					"code_server": domain.code_server,
+					"code_server": getattr(domain, "code_server", None),
 				}
 			)
 		return wildcard_domains
@@ -2681,7 +2693,6 @@ class Server(BaseServer):
 
 	if TYPE_CHECKING:
 		from frappe.types import DF
-
 		from press.press.doctype.auto_scale_trigger.auto_scale_trigger import AutoScaleTrigger
 		from press.press.doctype.communication_info.communication_info import CommunicationInfo
 		from press.press.doctype.resource_tag.resource_tag import ResourceTag
@@ -2739,9 +2750,7 @@ class Server(BaseServer):
 		private_ip: DF.Data | None
 		private_mac_address: DF.Data | None
 		private_vlan_id: DF.Data | None
-		provider: DF.Literal[
-			"Generic", "Scaleway", "AWS EC2", "OCI", "Hetzner", "Vodacom", "DigitalOcean", "Frappe Compute"
-		]
+		provider: DF.Literal["Generic", "Scaleway", "AWS EC2", "OCI", "Hetzner", "Vodacom", "DigitalOcean", "Frappe Compute", "NayatelCloud", "UniCloud"]
 		proxy_server: DF.Link | None
 		public: DF.Check
 		ram: DF.Float

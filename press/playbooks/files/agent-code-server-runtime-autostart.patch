@@ -1,0 +1,81 @@
+diff --git a/agent/bench.py b/agent/bench.py
+index b15e725..debf0e6 100644
+--- a/agent/bench.py
++++ b/agent/bench.py
+@@ -742,6 +742,7 @@ class Bench(Base):
+     @job("Setup Code Server")
+     def setup_code_server(self, name, password):
+         self.create_code_server_config(name)
++        self.ensure_code_server_runtime()
+         self._start_code_server(password, setup=True)
+         self.generate_nginx_config()
+         self.server._reload_nginx()
+@@ -756,6 +757,34 @@ class Bench(Base):
+         with open(filename, "w") as file:
+             file.write(str(self.bench_config.get("codeserver_port")))
+ 
++    @step("Ensure Code Server Runtime")
++    def ensure_code_server_runtime(self):
++        result = self.docker_execute("command -v code-server", non_zero_throw=False)
++        if result.get("returncode") == 0 and result.get("output", "").strip():
++            return result
++
++        cache = "/home/frappe/agent/code-server-runtime/4.129.0"
++        required_paths = {
++            "binary": os.path.join(cache, "code-server"),
++            "library": os.path.join(cache, "code-server-lib"),
++        }
++        missing = [label for label, path in required_paths.items() if not os.path.exists(path)]
++        if missing:
++            raise AgentException(
++                {
++                    "status": "Failure",
++                    "output": (
++                        "code-server is missing in the bench container and the "
++                        f"agent runtime cache is incomplete: {', '.join(missing)}"
++                    ),
++                }
++            )
++
++        self.execute(f"docker cp {required_paths['binary']} {self.name}:/usr/bin/code-server")
++        self.execute(f"docker cp {required_paths['library']} {self.name}:/usr/lib/code-server")
++        self.docker_execute("chmod 755 /usr/bin/code-server", as_root=True)
++        return self.docker_execute("code-server --version")
++
+     @step("Start Code Server")
+     def _start_code_server(self, password, setup=False):
+         if setup:
+@@ -772,6 +801,7 @@ class Bench(Base):
+ 
+     @job("Start Code Server")
+     def start_code_server(self, password):
++        self.ensure_code_server_runtime()
+         self._start_code_server(password)
+ 
+     @job("Stop Code Server")
+diff --git a/agent/build_configs/config/supervisor.conf b/agent/build_configs/config/supervisor.conf
+index bd6d66b..8c9408b 100644
+--- a/agent/build_configs/config/supervisor.conf
++++ b/agent/build_configs/config/supervisor.conf
+@@ -246,7 +246,7 @@ programs=frappe-bench-redis-cache,frappe-bench-redis-queue
+ {% if doc.is_code_server_enabled %}
+ [program:code-server]
+ command=code-server --bind-addr 0.0.0.0:8088 .
+-autostart=false
++autostart=true
+ autorestart=true
+ stdout_logfile=/home/frappe/frappe-bench/logs/code-server.log
+ stderr_logfile=/home/frappe/frappe-bench/logs/code-server.error.log
+diff --git a/agent/templates/bench/supervisor.conf b/agent/templates/bench/supervisor.conf
+index 6b56191..7220b98 100644
+--- a/agent/templates/bench/supervisor.conf
++++ b/agent/templates/bench/supervisor.conf
+@@ -245,7 +245,7 @@ programs={{ custom_workers_group }}
+ {% if is_code_server_enabled %}
+ [program:code-server]
+ command=code-server --bind-addr 0.0.0.0:8088 .
+-autostart=false
++autostart=true
+ autorestart=true
+ stdout_logfile=/home/frappe/frappe-bench/logs/code-server.log
+ stderr_logfile=/home/frappe/frappe-bench/logs/code-server.error.log

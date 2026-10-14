@@ -81,7 +81,7 @@
 - name: Get Docker Info
   command: docker info
 
-- name: Start Agent processes
+- name: Restart Agent processes to apply docker group membership
   supervisorctl:
     name: "agent:"
-    state: started
+    state: restarted

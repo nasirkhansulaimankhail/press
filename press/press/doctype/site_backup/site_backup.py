@@ -560,12 +560,23 @@ def process_backup_site_job_update(job):
 
 
 def get_backup_bucket(cluster, region=False):
-	bucket_for_cluster = frappe.get_all("Backup Bucket", {"cluster": cluster}, ["name", "region"], limit=1)
+	fields = ["name", "region", "endpoint_url"]
+	bucket = frappe.db.get_value("Backup Bucket", {"cluster": cluster}, fields, as_dict=True)
 	default_bucket = frappe.db.get_single_value("Press Settings", "aws_s3_bucket")
 
+	if not bucket and default_bucket:
+		bucket = frappe.db.get_value("Backup Bucket", default_bucket, fields, as_dict=True)
+
+	if not bucket and default_bucket:
+		bucket = frappe._dict(
+			name=default_bucket,
+			region=frappe.db.get_single_value("Press Settings", "backup_region"),
+			endpoint_url=None,
+		)
+
 	if region:
-		return bucket_for_cluster[0] if bucket_for_cluster else default_bucket
-	return bucket_for_cluster[0]["name"] if bucket_for_cluster else default_bucket
+		return bucket
+	return bucket.name if bucket else None
 
 
 def process_deactivate_site_job_update(job: AgentJob):

@@ -18,9 +18,18 @@ dayjs.extend(timezone);
 dayjs.extend(advancedFormat);
 
 export function dayjsLocal(dateTimeString) {
-	let localTimezone = dayjs.tz.guess();
-	// dates are stored in Asia/Calcutta timezone on the server
-	return dayjs.tz(dateTimeString, 'Asia/Calcutta').tz(localTimezone);
+	const localTimezone = dayjs.tz.guess();
+	const systemTimezone = window.system_timezone || 'UTC';
+	if (dateTimeString == null) return dayjs().tz(localTimezone);
+	// Offset-aware inputs already identify an instant; only naive server values
+	// need parsing in the timezone supplied by Press's dashboard boot data.
+	if (
+		typeof dateTimeString !== 'string' ||
+		/(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateTimeString)
+	) {
+		return dayjs(dateTimeString).tz(localTimezone);
+	}
+	return dayjs.tz(dateTimeString, systemTimezone).tz(localTimezone);
 }
 
 export function dayjsIST(dateTimeString) {

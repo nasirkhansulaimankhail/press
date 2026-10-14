@@ -6,7 +6,7 @@ import frappe
 import requests
 
 from press.api.github import decode_github_oauth_state, get_github_callback_login_redirect
-from press.utils import get_valid_teams_for_user, log_error
+from press.utils import get_valid_teams_for_user, is_user_part_of_team, log_error
 
 
 def get_context(context):
@@ -22,8 +22,7 @@ def get_context(context):
 		try:
 			decoded_state = decode_github_oauth_state(state)
 			team = decoded_state["team"]
-			valid_teams = {team_doc["name"] for team_doc in get_valid_teams_for_user(frappe.session.user)}
-			if team not in valid_teams:
+			if not can_update_team_github_access_token(frappe.session.user, team):
 				raise frappe.PermissionError("Not permitted to update this team's GitHub access token")
 
 			redirect_url = frappe.utils.get_url(decoded_state["redirect_url"])
@@ -49,6 +48,11 @@ def obtain_access_token(code, team):
 		frappe.db.set_value("Team", team, "github_access_token", response["access_token"])
 	except Exception:
 		log_error("Access Token Error", team=team, response=summarize_github_token_response(response))
+
+
+def can_update_team_github_access_token(user, team):
+	valid_teams = {team_doc["name"] for team_doc in get_valid_teams_for_user(user)}
+	return team in valid_teams or is_user_part_of_team(user, team)
 
 
 def summarize_github_token_response(response):

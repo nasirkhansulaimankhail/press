@@ -13,19 +13,17 @@ from press.utils import log_error, servers_using_alternative_port_for_communicat
 
 
 def get_benches():
-	self_hosted_stand_alone_servers = frappe.get_all(
-		"Server",
-		{"is_standalone": True, "is_self_hosted": True, "status": "Active"},
-		pluck="name",
-	)
 	monitoring_disabled_servers = frappe.get_all(
 		"Server", {"is_monitoring_disabled": True, "status": ("!=", "Archived")}, pluck="name"
 	)
-	excluded_servers = set(self_hosted_stand_alone_servers + monitoring_disabled_servers)
+	site_filters = {"status": "Active", "is_monitoring_disabled": False}
+	if monitoring_disabled_servers:
+		site_filters["server"] = ("not in", monitoring_disabled_servers)
+
 	sites = frappe.get_all(
 		"Site",
 		["name", "bench"],
-		{"status": "Active", "server": ("not in", excluded_servers), "is_monitoring_disabled": False},
+		site_filters,
 		ignore_ifnull=True,
 	)
 	sites.sort(key=lambda x: (x.bench, x.name))

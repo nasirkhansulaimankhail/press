@@ -1,0 +1,200 @@
+import argparse
+import json
+import sys
+import traceback
+
+from ansible import constants, context
+from ansible.executor.playbook_executor import PlaybookExecutor
+from ansible.executor.task_executor import TaskExecutor
+from ansible.inventory.manager import InventoryManager
+from ansible.module_utils.common.collections import ImmutableDict
+from ansible.parsing.dataloader import DataLoader
+from ansible.playbook import Playbook
+from ansible.plugins.action.async_status import ActionModule
+from ansible.plugins.callback import CallbackBase
+from ansible.utils.display import Display
+from ansible.vars.manager import VariableManager
+
+
+class EventWriter:
+	def emit(self, event: str, **payload):
+		print(json.dumps({"event": event, **payload}, default=str), flush=True)
+
+
+class BridgeCallback(CallbackBase):
+	def __init__(self, writer: EventWriter):
+		super().__init__()
+		self.writer = writer
+
+	def v2_runner_on_ok(self, result, *args, **kwargs):
+		self.writer.emit("task_result", status="Success", **self._serialize_result(result))
+
+	def v2_runner_on_failed(self, result, *args, **kwargs):
+		self.writer.emit("task_result", status="Failure", **self._serialize_result(result))
+
+	def v2_runner_on_skipped(self, result):
+		self.writer.emit("task_result", status="Skipped", **self._serialize_result(result))
+
+	def v2_runner_on_unreachable(self, result):
+		self.writer.emit("task_result", status="Unreachable", **self._serialize_result(result))
+
+	def v2_playbook_on_task_start(self, task, is_conditional):
+		role = task._role.get_name() if task._role else None
+		self.writer.emit("task_start", role=role, task=task.name)
+
+	def v2_playbook_on_start(self, playbook):
+		self.writer.emit("play_start")
+
+	def v2_playbook_on_stats(self, stats):
+		host = next(iter(stats.processed.keys()))
+		self.writer.emit("play_stats", stats=stats.summarize(host))
+
+	def on_async_start(self, role: str, task: str, job_id: str):
+		self.writer.emit("async_start", role=role, task=task, job_id=job_id)
+
+	def on_async_poll(self, result: dict):
+		self.writer.emit("async_poll", result=result)
+
+	def _serialize_result(self, result):
+		role = result._task._role.get_name() if result._task._role else None
+		return {
+			"role": role,
+			"task": result._task.name,
+			"action": result._task.action,
+			"result": result._result,
+		}
+
+
+class BridgeAnsible:
+	def __init__(self, args, writer: EventWriter):
+		self.args = args
+		self.writer = writer
+		self.callback = BridgeCallback(writer)
+		self.patch()
+
+		constants.HOST_KEY_CHECKING = False
+		context.CLIARGS = ImmutableDict(
+			become_method="sudo",
+			check=False,
+			connection="ssh",
+			extra_vars=[
+				f"{key}='{value}'"
+				for key, value in self.args.extra_vars.items()
+				if value is not None
+			],
+			remote_user=self.args.user,
+			start_at_task=None,
+			syntax=False,
+			verbosity=1,
+			ssh_common_args=self.args.ssh_common_args,
+		)
+
+		self.loader = DataLoader()
+		self.passwords = {}
+		self.inventory = InventoryManager(loader=self.loader, sources=f"{self.args.host},")
+		host = self.inventory.get_host(self.args.host)
+		host.set_variable("ansible_port", self.args.port)
+		if self.args.ssh_common_args:
+			host.set_variable("ansible_ssh_common_args", self.args.ssh_common_args)
+		self.variable_manager = VariableManager(loader=self.loader, inventory=self.inventory)
+		self.display = Display()
+		self.display.verbosity = 1
+
+	def inspect(self):
+		playbook = Playbook.load(
+			self.args.playbook,
+			variable_manager=self.variable_manager,
+			loader=self.loader,
+		)
+		play = playbook.get_plays()[0]
+		tasks = []
+		for role in play.get_roles():
+			for block in role.get_task_blocks():
+				for task in block.block:
+					tasks.append({"role": role.get_name(), "task": task.name})
+		return {"play": play.get_name(), "tasks": tasks}
+
+	def run(self):
+		executor = PlaybookExecutor(
+			playbooks=[self.args.playbook],
+			inventory=self.inventory,
+			variable_manager=self.variable_manager,
+			loader=self.loader,
+			passwords=self.passwords,
+		)
+		executor._tqm._stdout_callback = self.callback
+		try:
+			return executor.run()
+		finally:
+			self.unpatch()
+
+	def patch(self):
+		def modified_action_module_run(*args, **kwargs):
+			result = self.action_module_run(*args, **kwargs)
+			self.callback.on_async_poll(result)
+			return result
+
+		def modified_poll_async_result(executor, result, templar, task_vars=None):
+			job_id = result["ansible_job_id"]
+			task = executor._task
+			self.callback.on_async_start(task._role.get_name(), task.name, job_id)
+			return self._poll_async_result(executor, result, templar, task_vars=task_vars)
+
+		if ActionModule.run.__module__ != "__main__":
+			self.action_module_run = ActionModule.run
+			ActionModule.run = modified_action_module_run
+
+		if TaskExecutor.run.__module__ != "__main__":
+			self._poll_async_result = TaskExecutor._poll_async_result
+			TaskExecutor._poll_async_result = modified_poll_async_result
+
+	def unpatch(self):
+		TaskExecutor._poll_async_result = self._poll_async_result
+		ActionModule.run = self.action_module_run
+
+
+def parse_args():
+	parser = argparse.ArgumentParser()
+	subparsers = parser.add_subparsers(dest="command", required=True)
+
+	def add_common(subparser):
+		subparser.add_argument("--playbook", required=True)
+		subparser.add_argument("--host", required=True)
+		subparser.add_argument("--port", required=True, type=int)
+		subparser.add_argument("--user", required=True)
+		subparser.add_argument("--extra-vars-file", required=True)
+		subparser.add_argument("--ssh-common-args")
+
+	inspect = subparsers.add_parser("inspect")
+	add_common(inspect)
+
+	run = subparsers.add_parser("run")
+	add_common(run)
+
+	args = parser.parse_args()
+	with open(args.extra_vars_file) as handle:
+		args.extra_vars = json.load(handle)
+	return args
+
+
+def main():
+	args = parse_args()
+	writer = EventWriter()
+
+	try:
+		bridge = BridgeAnsible(args, writer)
+		if args.command == "inspect":
+			print(json.dumps(bridge.inspect(), default=str))
+			return 0
+
+		return bridge.run()
+	except Exception as exc:
+		if args.command == "run":
+			writer.emit("runner_error", message=str(exc), traceback=traceback.format_exc())
+		else:
+			print(traceback.format_exc(), file=sys.stderr)
+		return 1
+
+
+if __name__ == "__main__":
+	raise SystemExit(main())

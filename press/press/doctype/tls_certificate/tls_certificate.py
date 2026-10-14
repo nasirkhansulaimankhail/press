@@ -551,10 +551,7 @@ class LetsEncrypt(BaseCA):
 		if self.wildcard:
 			self._obtain_wildcard()
 		else:
-			if frappe.conf.developer_mode:
-				self._obtain_naked_with_dns()
-			else:
-				self._obtain_naked()
+			self._obtain_naked()
 
 	def _obtain_wildcard(self):
 		domain = frappe.get_doc("Root Domain", self.domain[2:])
@@ -587,7 +584,7 @@ class LetsEncrypt(BaseCA):
 		self.run(self._certbot_command())
 
 	def _certbot_command(self):
-		if self.wildcard or frappe.conf.developer_mode:
+		if self.wildcard:
 			plugin = "--dns-route53"
 		else:
 			plugin = f"--webroot --webroot-path {self.webroot_directory}"

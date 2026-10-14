@@ -115,6 +115,10 @@ class SiteDomain(Document):
 		return bool(frappe.db.exists("Root Domain", self.domain.split(".", 1)[1], "name"))
 
 	def setup_redirect_in_proxy(self):
+		# TLS-less custom domains terminate HTTPS at the external edge proxy.
+		# Creating a backend host for them produces an nginx vhost without certificates.
+		if not self.tls_certificate:
+			return
 		site: Site = frappe.get_doc("Site", self.site)
 		target = site.host_name
 		if target == self.name:

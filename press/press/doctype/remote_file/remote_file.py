@@ -38,30 +38,54 @@ def poll_file_statuses():
 		"Press Settings", "Press Settings", "offsite_backups_secret_access_key"
 	)
 	default_region = frappe.db.get_single_value("Press Settings", "backup_region")
+	backup_bucket_configs = {
+		b.bucket_name: b
+		for b in frappe.get_all(
+			"Backup Bucket",
+			["bucket_name", "cluster", "region", "endpoint_url"],
+		)
+	}
+
+	def get_backup_bucket_config(bucket_name: str | None) -> dict:
+		if not bucket_name or bucket_name not in backup_bucket_configs:
+			return {}
+		config = backup_bucket_configs[bucket_name]
+		return {
+			"region": config.region,
+			"endpoint_url": config.endpoint_url,
+		}
+
+	default_backup_bucket = frappe.db.get_single_value("Press Settings", "aws_s3_bucket")
+	default_backup_bucket_config = get_backup_bucket_config(default_backup_bucket)
+	remote_uploads_bucket = frappe.db.get_single_value("Press Settings", "remote_uploads_bucket")
+	remote_uploads_bucket_config = get_backup_bucket_config(remote_uploads_bucket)
 	buckets = [
 		{
-			"name": frappe.db.get_single_value("Press Settings", "aws_s3_bucket"),
-			"region": default_region,
+			"name": default_backup_bucket,
+			"region": default_backup_bucket_config.get("region") or default_region,
 			"access_key_id": aws_access_key,
 			"secret_access_key": aws_secret_key,
+			"endpoint_url": default_backup_bucket_config.get("endpoint_url"),
 		},
 		{
-			"name": frappe.db.get_single_value("Press Settings", "remote_uploads_bucket"),
-			"region": default_region,
+			"name": remote_uploads_bucket,
+			"region": remote_uploads_bucket_config.get("region") or default_region,
 			"access_key_id": frappe.db.get_single_value("Press Settings", "remote_access_key_id"),
 			"secret_access_key": get_decrypted_password(
 				"Press Settings", "Press Settings", "remote_secret_access_key"
 			),
+			"endpoint_url": remote_uploads_bucket_config.get("endpoint_url"),
 		},
 	]
 
-	for b in frappe.get_all("Backup Bucket", ["bucket_name", "cluster", "region"]):
+	for b in backup_bucket_configs.values():
 		buckets.append(
 			{
 				"name": b["bucket_name"],
 				"region": b["region"],
 				"access_key_id": aws_access_key,
 				"secret_access_key": aws_secret_key,
+				"endpoint_url": b["endpoint_url"],
 			}
 		)
 
@@ -84,6 +108,7 @@ def poll_file_statuses_from_bucket(bucket):
 		aws_access_key_id=bucket["access_key_id"],
 		aws_secret_access_key=bucket["secret_access_key"],
 		region_name=bucket["region"],
+		endpoint_url=bucket.get("endpoint_url"),
 	)
 
 	available_files = set()

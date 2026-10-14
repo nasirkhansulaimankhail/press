@@ -1884,14 +1884,22 @@ def new_release_group(title, version, apps, team=None, cluster=None, saas_app=""
 				},
 				distinct=True,
 			)
+			cluster_doc = frappe.db.get_value("Cluster", cluster, ["public", "team"], as_dict=True)
+			if cluster_doc and not cluster_doc.public and cluster_doc.team != team:
+				frappe.throw("You can only create benches in your private regions")
+
+			server_filters = {
+				"status": "Active",
+				"cluster": cluster,
+				"use_for_new_benches": True,
+				"name": ("not in", restricted_server_names),
+			}
+			if cluster_doc and not cluster_doc.public and cluster_doc.team:
+				server_filters["team"] = cluster_doc.team
+
 			servers = frappe.get_all(
 				"Server",
-				{
-					"status": "Active",
-					"cluster": cluster,
-					"use_for_new_benches": True,
-					"name": ("not in", restricted_server_names),
-				},
+				server_filters,
 				pluck="name",
 				limit=1,
 			)

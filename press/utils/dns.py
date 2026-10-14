@@ -39,30 +39,41 @@ def create_dns_record(doc, record_name=None):
 	if frappe.flags.in_test:
 		return
 
-	proxy_server, is_standalone = frappe.get_value("Server", doc.server, ["proxy_server", "is_standalone"])
+	server = frappe.get_value(
+		"Server", doc.server, ["proxy_server", "is_standalone"], as_dict=True
+	)
+	dns_target = doc.server if server.is_standalone else server.proxy_server
 
-	if doc.cluster == domain.default_cluster and not is_standalone:
-		# Check if the cluster has multiple proxy servers
-		proxy_servers = frappe.get_all(
-			"Proxy Server",
-			{"cluster": doc.cluster, "status": "Active"},
-			pluck="name",
-		)
-		if len(proxy_servers) == 1 or (
-			len(proxy_servers) > 1 and domain.default_proxy_server == proxy_server
-		):
-			"""
-			If we have a single proxy server
-			Or, in case of multiple proxy server, the site is using the default proxy server
+	# The root-domain wildcard only covers sites routed through its primary proxy.
+	# Every other target, including a self-hosted server's proxy, needs an exact
+	# CNAME so it does not fall through to the primary proxy's wildcard route.
+	if not server.is_standalone and dns_target == get_wildcard_proxy_server(domain):
+		return
 
-			We can skip creating dns record
-			"""
-			return
+	_change_dns_record("UPSERT", domain, dns_target, record_name=record_name)
 
-	if is_standalone:
-		_change_dns_record("UPSERT", domain, doc.server, record_name=record_name)
-	else:
-		_change_dns_record("UPSERT", domain, proxy_server, record_name=record_name)
+
+def get_wildcard_proxy_server(domain: RootDomain) -> str | None:
+	"""Return the proxy server covered by a root domain's wildcard record."""
+	if domain.default_proxy_server:
+		return domain.default_proxy_server
+
+	primary_proxy = frappe.db.get_value(
+		"Proxy Server",
+		{"cluster": domain.default_cluster, "status": "Active", "is_primary": True},
+		"name",
+	)
+	if primary_proxy:
+		return primary_proxy
+
+	# Preserve the implicit-default behavior for older clusters that predate the
+	# is_primary flag and have exactly one active proxy.
+	proxy_servers = frappe.get_all(
+		"Proxy Server",
+		{"cluster": domain.default_cluster, "status": "Active"},
+		pluck="name",
+	)
+	return proxy_servers[0] if len(proxy_servers) == 1 else None
 
 
 def _change_dns_record(method: str, domain: RootDomain, proxy_server: str, record_name: str | None = None):

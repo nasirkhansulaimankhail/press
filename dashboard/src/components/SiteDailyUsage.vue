@@ -17,7 +17,7 @@
 			unit="seconds"
 			:chartTheme="[$theme.colors.purple[500]]"
 			:loading="$resources.requestCounter.loading"
-			:error="$resources.requestCounter.error"
+			:error="dailyUsageError"
 			:showCard="false"
 			class="h-[15.55rem] p-2 pb-3"
 		/>
@@ -42,6 +42,12 @@ export default {
 		},
 	},
 	computed: {
+		dailyUsageError() {
+			return (
+				this.$resources.requestCounter.error ||
+				this.$resources.requestCounter.data?.analytics_error?.usage
+			);
+		},
 		dailyUsageData() {
 			let dailyUsageData = this.$resources.requestCounter.data?.data;
 			if (!dailyUsageData) return;

@@ -73,7 +73,7 @@ class Cluster(Document):
 		beta: DF.Check
 		by_default_select_unified_mode: DF.Check
 		cidr_block: DF.Data | None
-		cloud_provider: DF.Literal["AWS EC2", "Generic", "OCI", "Hetzner", "DigitalOcean", "Frappe Compute"]
+		cloud_provider: DF.Literal["AWS EC2", "Generic", "OCI", "Hetzner", "DigitalOcean", "Frappe Compute", "NayatelCloud", "UniCloud"]
 		country: DF.Link | None
 		default_app_server_plan: DF.Link | None
 		default_app_server_plan_type: DF.Link | None
@@ -1707,13 +1707,40 @@ class Cluster(Document):
 	def get_all_for_new_bench(cls, extra_filters=None) -> list[dict[str, str]]:
 		if extra_filters is None:
 			extra_filters = {}
-		cluster_names = unique(frappe.db.get_all("Server", filters={"status": "Active"}, pluck="cluster"))
-		# Temporarily here to skip the Frappe Compute cloud provider
-		filters = {"name": ("in", cluster_names), "public": True}
+		else:
+			extra_filters = dict(extra_filters)
+
+		active_server_clusters = unique(
+			frappe.db.get_all("Server", filters={"status": "Active"}, pluck="cluster")
+		)
+		current_team = get_current_team()
+		clusters = frappe.db.get_all(
+			"Cluster",
+			filters={"name": ("in", active_server_clusters)},
+			fields=["name", "public", "team"],
+		)
+		cluster_names = [
+			cluster.name
+			for cluster in clusters
+			if cluster.public or (cluster.team and cluster.team == current_team)
+		]
+
+		name_filter = extra_filters.pop("name", None)
+		if name_filter:
+			operator, value = name_filter
+			if operator == "in":
+				cluster_names = [name for name in cluster_names if name in value]
+			elif operator == "not in":
+				cluster_names = [name for name in cluster_names if name not in value]
+			else:
+				extra_filters["name"] = name_filter
+
+		if not cluster_names:
+			return []
 
 		return frappe.db.get_all(
 			"Cluster",
-			filters={**filters, **extra_filters},
+			filters={"name": ("in", cluster_names), **extra_filters},
 			fields=["name", "title", "image", "beta"],
 		)
 

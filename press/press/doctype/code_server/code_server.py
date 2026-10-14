@@ -108,6 +108,14 @@ class CodeServer(Document):
 		except Exception as e:
 			log_error(title="Archive Code Server Failed", data=e)
 
+	@frappe.whitelist()
+	def show_password(self):
+		frappe.msgprint(self.get_password("password"), title="Password", indicator="green")
+
+	@frappe.whitelist()
+	def show_passworod(self):
+		self.show_password()
+
 
 def process_new_code_server_job_update(job):
 	frappe.db.get_value("Code Server", job.code_server, "status", for_update=True)

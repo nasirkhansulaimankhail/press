@@ -19,6 +19,7 @@ frappe.ui.form.on('Code Server', {
 			[__('Start'), 'start'],
 			[__('Stop'), 'stop'],
 			[__('Archive'), 'archive'],
+			[__('Show Password'), 'show_password'],
 		].forEach(([label, action, condition = true]) => {
 			if (condition) {
 				frm.add_custom_button(

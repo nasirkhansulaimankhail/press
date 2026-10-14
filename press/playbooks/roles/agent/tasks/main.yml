@@ -9,6 +9,36 @@
     version: '{% if agent_branch is defined and agent_branch is truthy %} {{ agent_branch }} {% else %} master {% endif %}'
     update: yes
 
+- name: Copy S3-compatible backup endpoint patch
+  copy:
+    src: '{{ playbook_dir }}/files/agent-site-s3-endpoint.patch'
+    dest: /tmp/agent-site-s3-endpoint.patch
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply S3-compatible backup endpoint patch
+  ansible.posix.patch:
+    src: /tmp/agent-site-s3-endpoint.patch
+    remote_src: yes
+    basedir: /home/frappe/agent/repo
+    strip: 1
+
+- name: Copy Code Server runtime and autostart patch
+  copy:
+    src: '{{ playbook_dir }}/files/agent-code-server-runtime-autostart.patch'
+    dest: /tmp/agent-code-server-runtime-autostart.patch
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply Code Server runtime and autostart patch
+  ansible.posix.patch:
+    src: /tmp/agent-code-server-runtime-autostart.patch
+    remote_src: yes
+    basedir: /home/frappe/agent/repo
+    strip: 1
+
 - name: Install Agent
   become: yes
   become_user: frappe
@@ -16,7 +46,9 @@
     name: file:///home/frappe/agent/repo
     virtualenv: /home/frappe/agent/env
     virtualenv_python: python3
+    virtualenv_command: /usr/bin/virtualenv
     editable: yes
+    extra_args: --default-timeout=120 --retries 5
 
 - name: Generate Agent Configuration File
   become: yes

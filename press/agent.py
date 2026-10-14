@@ -8,6 +8,7 @@ import os
 import re
 from contextlib import suppress
 from datetime import date
+from ipaddress import ip_address
 from typing import TYPE_CHECKING, Any, Literal
 
 import frappe
@@ -54,6 +55,28 @@ class Agent:
 		self.server = server
 		self.__servers_using_alt_ports = servers_using_alternative_port_for_communication()
 		self.port = 443 if self.server not in self.__servers_using_alt_ports else 8443
+
+	def _get_proxy_upstream_ip(self, server: str) -> str:
+		_server = frappe.get_doc("Server", server)
+		if _server.private_ip and _server.proxy_server:
+			proxy_private_ip = frappe.db.get_value("Proxy Server", _server.proxy_server, "private_ip")
+			if self._same_private_ipv4_subnet(_server.private_ip, proxy_private_ip):
+				return _server.private_ip
+		return _server.ip if _server.is_self_hosted else _server.private_ip
+
+	def _same_private_ipv4_subnet(self, first_ip: str | None, second_ip: str | None) -> bool:
+		if not first_ip or not second_ip:
+			return False
+		try:
+			first = ip_address(first_ip)
+			second = ip_address(second_ip)
+		except ValueError:
+			return False
+		if first.version != 4 or second.version != 4:
+			return False
+		if not first.is_private or not second.is_private:
+			return False
+		return first_ip.split(".")[:3] == second_ip.split(".")[:3]
 
 	def new_bench(self, bench: "Bench"):
 		settings = frappe.db.get_value(
@@ -250,8 +273,7 @@ class Agent:
 		)
 
 	def rename_upstream_site(self, server: str, site, new_name: str, domains: list[str]):
-		_server = frappe.get_doc("Server", server)
-		ip = _server.ip if _server.is_self_hosted else _server.private_ip
+		ip = self._get_proxy_upstream_ip(server)
 		data = {"new_name": new_name, "domains": domains}
 		return self.create_agent_job(
 			"Rename Site on Upstream",
@@ -612,14 +634,19 @@ class Agent:
 
 	def new_host(self, domain):
 		certificate = frappe.get_doc("TLS Certificate", domain.tls_certificate)
+		certificate_files = {
+			"privkey.pem": certificate.private_key,
+			"fullchain.pem": certificate.full_chain,
+			"chain.pem": certificate.intermediate_chain,
+		}
+		if not all(isinstance(value, str) and value.strip() for value in certificate_files.values()):
+			frappe.throw(
+				f"TLS Certificate {certificate.name} is incomplete; refusing to update the proxy host"
+			)
 		data = {
 			"name": domain.domain,
 			"target": domain.site,
-			"certificate": {
-				"privkey.pem": certificate.private_key,
-				"fullchain.pem": certificate.full_chain,
-				"chain.pem": certificate.intermediate_chain,
-			},
+			"certificate": certificate_files,
 		}
 		return self.create_agent_job(
 			"Add Host to Proxy", "proxy/hosts", data, host=domain.domain, site=domain.site
@@ -652,8 +679,7 @@ class Agent:
 		)
 
 	def new_server(self, server):
-		_server = frappe.get_doc("Server", server)
-		ip = _server.ip if _server.is_self_hosted else _server.private_ip
+		ip = self._get_proxy_upstream_ip(server)
 		data = {"name": ip}
 		return self.create_agent_job("Add Upstream to Proxy", "proxy/upstreams", data, upstream=server)
 
@@ -678,8 +704,7 @@ class Agent:
 		)
 
 	def new_upstream_file(self, server, site=None, code_server=None):
-		_server = frappe.get_doc("Server", server)
-		ip = _server.ip if _server.is_self_hosted else _server.private_ip
+		ip = self._get_proxy_upstream_ip(server)
 		data = {"name": site if site else code_server}
 		doctype = "Site" if site else "Code Server"
 		return self.create_agent_job(
@@ -692,8 +717,7 @@ class Agent:
 		)
 
 	def add_domain_to_upstream(self, server, site=None, domain=None):
-		_server = frappe.get_doc("Server", server)
-		ip = _server.ip if _server.is_self_hosted else _server.private_ip
+		ip = self._get_proxy_upstream_ip(server)
 		data = {"domain": domain}
 		return self.create_agent_job(
 			"Add Domain to Upstream",
@@ -704,8 +728,7 @@ class Agent:
 		)
 
 	def remove_upstream_file(self, server, site=None, site_name=None, code_server=None):
-		_server = frappe.get_doc("Server", server)
-		ip = _server.ip if _server.is_self_hosted else _server.private_ip
+		ip = self._get_proxy_upstream_ip(server)
 		doctype = "Site" if site else "Code Server"
 		file_name = site_name or site if (site or site_name) else code_server
 		extra_domains = frappe.get_all(
@@ -899,8 +922,7 @@ class Agent:
 			pluck="domain",
 		)
 		data = {"status": status, "extra_domains": extra_domains, "skip_reload": skip_reload}
-		_server = frappe.get_doc("Server", server)
-		ip = _server.ip if _server.is_self_hosted else _server.private_ip
+		ip = self._get_proxy_upstream_ip(server)
 		return self.create_agent_job(
 			"Update Site Status",
 			f"proxy/upstreams/{ip}/sites/{site}/status",
@@ -1973,6 +1995,7 @@ Response: {reason or getattr(result, "text", "Unknown")}
 		settings = frappe.get_single("Press Settings")
 		backup_bucket = get_backup_bucket(cluster, region=True)
 		bucket_name = backup_bucket.get("name") if isinstance(backup_bucket, dict) else backup_bucket
+		endpoint_url = backup_bucket.get("endpoint_url") if isinstance(backup_bucket, dict) else ""
 
 		if not (settings.aws_s3_bucket or bucket_name):
 			return None
@@ -1985,6 +2008,7 @@ Response: {reason or getattr(result, "text", "Unknown")}
 
 		return {
 			"bucket": bucket_name,
+			"endpoint_url": endpoint_url,
 			"auth": auth,
 			"path": backups_path,
 		}

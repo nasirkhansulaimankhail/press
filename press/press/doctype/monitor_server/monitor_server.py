@@ -32,6 +32,22 @@ class SitesDownAlert(TypedDict):
 	labels: SitesDownAlertLabels
 
 
+def get_press_database_server() -> str:
+	db_host = frappe.conf.get("db_host")
+	if db_host in ("127.0.0.1", "localhost"):
+		return frappe.local.site
+	return f"db.{frappe.local.site}"
+
+
+def get_press_database_replica_server() -> str:
+	replica_host = frappe.conf.get("replica_host")
+	if not replica_host:
+		return ""
+	if replica_host in ("127.0.0.1", "localhost"):
+		return frappe.local.site
+	return f"db2.{frappe.local.site}"
+
+
 class MonitorServer(BaseServer):
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
@@ -146,8 +162,8 @@ class MonitorServer(BaseServer):
 					"monitoring_password": monitoring_password,
 					"press_monitoring_password": press_monitoring_password,
 					"press_app_server": frappe.local.site,
-					"press_db_server": f"db.{frappe.local.site}",
-					"press_db_replica_server": f"db2.{frappe.local.site}" if frappe.conf.replica_host else "",
+					"press_db_server": get_press_database_server(),
+					"press_db_replica_server": get_press_database_replica_server(),
 					"press_url": press_url,
 					"prometheus_data_directory": self.prometheus_data_directory,
 					"monitor_token": monitor_token,
@@ -223,8 +239,8 @@ class MonitorServer(BaseServer):
 					"monitoring_password": monitoring_password,
 					"press_monitoring_password": press_monitoring_password,
 					"press_app_server": frappe.local.site,
-					"press_db_server": f"db.{frappe.local.site}",
-					"press_db_replica_server": f"db2.{frappe.local.site}" if frappe.conf.replica_host else "",
+					"press_db_server": get_press_database_server(),
+					"press_db_replica_server": get_press_database_replica_server(),
 					"registries_json": json.dumps(registries),
 					"log_servers_json": json.dumps(log_servers),
 					"clusters_json": json.dumps(clusters),

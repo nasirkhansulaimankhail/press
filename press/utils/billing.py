@@ -95,6 +95,18 @@ def is_frappe_auth_disabled():
 	return frappe.db.get_single_value("Press Settings", "disable_frappe_auth", cache=True)
 
 
+def is_stripe_enabled():
+	from frappe.utils.password import get_decrypted_password
+
+	secret_key = get_decrypted_password(
+		"Press Settings",
+		"Press Settings",
+		"stripe_secret_key",
+		raise_exception=False,
+	)
+	return bool(secret_key)
+
+
 def make_formatted_doc(doc, fieldtypes=None):
 	formatted = {}
 	filters = None

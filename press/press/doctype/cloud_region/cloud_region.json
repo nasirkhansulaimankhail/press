@@ -23,14 +23,14 @@
    "fieldname": "provider",
    "fieldtype": "Select",
    "label": "Provider",
-   "options": "AWS EC2\nOCI\nHetzner\nDigitalOcean\nFrappe Compute",
+   "options": "AWS EC2\nOCI\nHetzner\nDigitalOcean\nFrappe Compute\nNayatelCloud",
    "reqd": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-16 02:50:16.141861",
- "modified_by": "Administrator",
+ "modified": "2026-07-19 01:22:00.501095",
+ "modified_by": "nasir@univenturesgroup.com",
  "module": "Press",
  "name": "Cloud Region",
  "naming_rule": "By fieldname",

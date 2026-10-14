@@ -16,6 +16,7 @@ services:
       REGISTRY_STORAGE_S3_REGION: {{ region }}
       REGISTRY_STORAGE_S3_BUCKET: {{ bucket_name }}
       REGISTRY_STORAGE_S3_V4AUTH: "true"
+      REGISTRY_STORAGE_S3_FORCEPATHSTYLE: "true"
       REGISTRY_STORAGE_DELETE_ENABLED: "true"
 {%- endif %}
 
@@ -49,4 +50,3 @@ services:
     depends_on:
       - registry
 {%- endif %}
-

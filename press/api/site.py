@@ -29,6 +29,7 @@ from press.press.doctype.marketplace_app.marketplace_app import (
 	get_total_installs_by_app,
 )
 from press.press.doctype.remote_file.remote_file import get_remote_key
+from press.press.doctype.root_domain.root_domain import get_default_domain_for_team, validate_team_domain
 from press.press.doctype.server.server import is_dedicated_server
 from press.press.doctype.site.site import Site, get_updates_between_current_and_next_apps
 from press.press.doctype.site_plan.plan import Plan
@@ -146,6 +147,7 @@ def _new(site, server: str | None = None, ignore_plan_validation: bool = False):
 		frappe.throw(
 			"The site does not have a root domain set. Please <b>setup a root domain</b> for the site."
 		)
+	validate_team_domain(team.name, domain)
 
 	cluster = site.get("cluster") or frappe.db.get_single_value("Press Settings", "cluster")
 
@@ -323,8 +325,10 @@ def new(site):
 	- If plans supports it, deploy private bench and create site
 	- Else create site on shared bench
 	"""
-	if not hasattr(site, "domain") and not site.get("domain"):
-		site["domain"] = frappe.db.get_single_value("Press Settings", "domain")
+	team = get_current_team()
+	if not site.get("domain"):
+		site["domain"] = get_default_domain_for_team(team)
+	validate_team_domain(team, site.get("domain"))
 
 	selected_dedicated_server = site.get("server")
 	plan = site.get("plan")
@@ -864,7 +868,15 @@ def _get_team_dedicated_server_info(for_server: str | None = None):
 	servers = frappe.db.get_all(
 		"Server",
 		filters=filters,
-		fields=["name", "title", "cluster", "provider", "plan", "plan.price_usd as price_usd"],
+		fields=[
+			"name",
+			"title",
+			"cluster",
+			"provider",
+			"proxy_server",
+			"plan",
+			"plan.price_usd as price_usd",
+		],
 	)
 
 	if not servers:
@@ -975,12 +987,33 @@ def options_for_new(for_bench: str | None = None, for_server: str | None = None)
 		# app source details are all fetched from marketplace apps for public sites
 		marketplace_details = None
 
-	default_domain = frappe.db.get_single_value("Press Settings", "domain")
-	cluster_specific_root_domains = frappe.db.get_all(
+	team = get_current_team()
+	default_domain = get_default_domain_for_team(team)
+	available_root_domains = frappe.get_all(
 		"Root Domain",
-		{"name": ("like", f"%.{default_domain}")},
-		["name", "default_cluster as cluster"],
+		filters={"enabled": 1},
+		fields=["name", "default_cluster as cluster", "team"],
 	)
+	available_root_domains = [
+		root_domain
+		for root_domain in available_root_domains
+		if not root_domain.team or root_domain.team == team
+	]
+	active_proxies = frappe.get_all("Proxy Server", {"status": "Active"}, ["name", "cluster"])
+	proxy_clusters = {proxy.name: proxy.cluster for proxy in active_proxies}
+	for root_domain in available_root_domains:
+		root_domain.proxy_servers = frappe.get_all(
+			"Proxy Server Domain",
+			filters={"domain": root_domain.name},
+			pluck="parent",
+		)
+		root_domain.clusters = sorted(
+			{
+				proxy_clusters[proxy]
+				for proxy in root_domain.proxy_servers
+				if proxy in proxy_clusters
+			}
+		)
 
 	# providers list from all clusters across versions
 	unique_providers = {}
@@ -1010,7 +1043,7 @@ def options_for_new(for_bench: str | None = None, for_server: str | None = None)
 		"versions": available_versions,
 		"domain": default_domain,
 		"closest_cluster": get_nearest_cluster(),
-		"cluster_specific_root_domains": cluster_specific_root_domains,
+		"available_root_domains": available_root_domains,
 		"marketplace_details": marketplace_details,
 		"app_source_details": app_source_details_grouped,
 		"providers": list(unique_providers.values()),
@@ -1224,7 +1257,7 @@ def get_additional_clusters_for_private_benches(existing_clusters, cloud_provide
 
 @frappe.whitelist()
 def get_domain():
-	return frappe.db.get_value("Press Settings", "Press Settings", ["domain"])
+	return get_default_domain_for_team(get_current_team())
 
 
 @frappe.whitelist()
@@ -2253,25 +2286,18 @@ def get_trial_plan():
 
 @frappe.whitelist()
 def get_upload_link(file, parts=1):
-	upload_bucket_details = frappe.db.get_values(
-		"Press Settings",
-		"Press Settings",
-		["remote_uploads_bucket", "region_name", "remote_access_key_id", "remote_link_expiry"],
-		as_dict=True,
-	)[0]
-
-	bucket_name = upload_bucket_details.remote_uploads_bucket
-	expiration = cint(upload_bucket_details.remote_link_expiry) or 3600
+	s3_config = _get_remote_upload_s3_config()
+	bucket_name = s3_config["bucket_name"]
+	expiration = s3_config["expiration"]
 	object_name = get_remote_key(file)
 	parts = int(parts)
 
 	s3_client = client(
 		"s3",
-		aws_access_key_id=upload_bucket_details.remote_access_key_id,
-		aws_secret_access_key=get_decrypted_password(
-			"Press Settings", "Press Settings", "remote_secret_access_key"
-		),
-		region_name=upload_bucket_details.region_name or "ap-south-1",
+		aws_access_key_id=s3_config["access_key_id"],
+		aws_secret_access_key=s3_config["secret_access_key"],
+		region_name=s3_config["region_name"],
+		endpoint_url=s3_config["endpoint_url"],
 	)
 	try:
 		# The response contains the presigned URL and required fields
@@ -2301,19 +2327,51 @@ def get_upload_link(file, parts=1):
 		log_error("Failed to Generate Presigned URL", content=e)
 
 
+def _get_remote_upload_s3_config():
+	upload_bucket_details = frappe.db.get_values(
+		"Press Settings",
+		"Press Settings",
+		["remote_uploads_bucket", "region_name", "remote_access_key_id", "remote_link_expiry"],
+		as_dict=True,
+	)[0]
+
+	bucket_name = upload_bucket_details.remote_uploads_bucket
+	bucket_config = frappe.db.get_value(
+		"Backup Bucket",
+		{"bucket_name": bucket_name},
+		["region", "endpoint_url"],
+		as_dict=True,
+	) or frappe.db.get_value(
+		"Backup Bucket",
+		bucket_name,
+		["region", "endpoint_url"],
+		as_dict=True,
+	)
+
+	return {
+		"bucket_name": bucket_name,
+		"expiration": cint(upload_bucket_details.remote_link_expiry) or 3600,
+		"access_key_id": upload_bucket_details.remote_access_key_id,
+		"secret_access_key": get_decrypted_password(
+			"Press Settings", "Press Settings", "remote_secret_access_key"
+		),
+		"region_name": (bucket_config or {}).get("region")
+		or upload_bucket_details.region_name
+		or "ap-south-1",
+		"endpoint_url": (bucket_config or {}).get("endpoint_url"),
+	}
+
+
 @frappe.whitelist()
 def multipart_exit(file, id, action, parts=None):
-	bucket_name = frappe.db.get_single_value("Press Settings", "remote_uploads_bucket")
+	s3_config = _get_remote_upload_s3_config()
+	bucket_name = s3_config["bucket_name"]
 	s3_client = client(
 		"s3",
-		aws_access_key_id=frappe.db.get_single_value("Press Settings", "remote_access_key_id"),
-		aws_secret_access_key=get_decrypted_password(
-			"Press Settings",
-			"Press Settings",
-			"remote_secret_access_key",
-			raise_exception=False,
-		),
-		region_name="ap-south-1",
+		aws_access_key_id=s3_config["access_key_id"],
+		aws_secret_access_key=s3_config["secret_access_key"],
+		region_name=s3_config["region_name"],
+		endpoint_url=s3_config["endpoint_url"],
 	)
 	if action == "abort":
 		response = s3_client.abort_multipart_upload(Bucket=bucket_name, Key=file, UploadId=id)

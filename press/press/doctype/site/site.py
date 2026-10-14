@@ -50,7 +50,12 @@ from press.marketplace.doctype.marketplace_app_plan.marketplace_app_plan import 
 	MarketplaceAppPlan,
 )
 from press.press.doctype.communication_info.communication_info import get_communication_info
-from press.press.doctype.root_domain.root_domain import get_matching_domain
+from press.press.doctype.root_domain.root_domain import (
+	get_default_domain_for_team,
+	get_matching_domain,
+	validate_domain_for_deployment,
+	validate_team_domain,
+)
 from press.press.doctype.server.server import Server
 from press.saas.doctype.product_trial.product_trial import create_free_app_subscription
 from press.utils.jobs import has_job_timeout_exceeded
@@ -435,7 +440,7 @@ class Site(Document, TagHelpers):
 	def _get_site_name(self, subdomain: str):
 		"""Get full site domain name given subdomain."""
 		if not self.domain:
-			self.domain = frappe.db.get_single_value("Press Settings", "domain")
+			self.domain = get_default_domain_for_team(self.team)
 		return f"{subdomain}.{self.domain}"
 
 	def autoname(self):
@@ -453,6 +458,17 @@ class Site(Document, TagHelpers):
 		self.validate_auto_update_fields()
 		self.validate_site_plan()
 		self.validate_backup_times()
+		self.validate_team_domain()
+
+	def validate_team_domain(self):
+		if not (self.team and self.domain):
+			return
+
+		if self.is_new() or self.has_value_changed("team") or self.has_value_changed("domain"):
+			validate_team_domain(self.team, self.domain)
+			if self.is_new():
+				proxy_server = frappe.db.get_value("Server", self.server, "proxy_server") if self.server else None
+				validate_domain_for_deployment(self.team, self.domain, self.cluster, proxy_server)
 
 	def before_insert(self):
 		if not self.bench and self.group:
@@ -715,8 +731,14 @@ class Site(Document, TagHelpers):
 				self._update_configuration(config=config, save=save)
 
 	def rename_upstream(self, new_name: str):
-		proxy_server = frappe.db.get_value("Server", self.server, "proxy_server")
-		agent = Agent(proxy_server, server_type="Proxy Server")
+		server = frappe.db.get_value(
+			"Server", self.server, ["proxy_server", "is_standalone"], as_dict=True
+		)
+		if server.is_standalone:
+			agent = Agent(self.server, server_type="Server")
+		else:
+			agent = Agent(server.proxy_server, server_type="Proxy Server")
+
 		site_domains = frappe.get_all(
 			"Site Domain", {"site": self.name, "name": ("!=", self.name)}, pluck="name"
 		)
@@ -778,7 +800,10 @@ class Site(Document, TagHelpers):
 
 		try:
 			# remove old dns record from route53 after rename
-			proxy_server = frappe.get_value("Server", self.server, "proxy_server")
+			server = frappe.db.get_value(
+				"Server", self.server, ["proxy_server", "is_standalone"], as_dict=True
+			)
+			proxy_server = self.server if server.is_standalone else server.proxy_server
 			self.remove_dns_record(proxy_server)
 		except Exception:
 			log_error("Failed to remove old site from Route53 DNS records.")

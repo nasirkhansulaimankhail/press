@@ -67,7 +67,9 @@
 	<div class="space-y-4 p-5">
 		<ErrorMessage
 			:message="
-				$resources.analytics.error || $resources.advancedAnalytics.error
+				$resources.analytics.error ||
+				$resources.advancedAnalytics.error ||
+				usageAnalyticsError
 			"
 		/>
 
@@ -81,6 +83,7 @@
 					unit="seconds"
 					:chartTheme="[$theme.colors.purple[500]]"
 					:loading="$resources.analytics.loading"
+					:error="usageAnalyticsError"
 					:showCard="false"
 					class="h-[15.55rem] p-2 pb-3"
 				/>
@@ -106,6 +109,7 @@
 					unit="requests"
 					:chartTheme="[$theme.colors.green[500]]"
 					:loading="$resources.analytics.loading"
+					:error="usageAnalyticsError"
 					:showCard="false"
 					class="h-[15.55rem] p-2 pb-3"
 				/>
@@ -129,6 +133,7 @@
 					unit="seconds"
 					:chartTheme="[$theme.colors.yellow[500]]"
 					:loading="$resources.analytics.loading"
+					:error="usageAnalyticsError"
 					:showCard="false"
 					class="h-[15.55rem] p-2 pb-3"
 				/>
@@ -612,6 +617,9 @@ export default {
 		},
 	},
 	computed: {
+		usageAnalyticsError() {
+			return this.$resources.analytics.data?.analytics_error?.usage;
+		},
 		requestChartColors() {
 			return [
 				this.$theme.colors.green[500],

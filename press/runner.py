@@ -1,25 +1,17 @@
 import json
+import os
+import subprocess
 import typing
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Literal
 
 import frappe
 import wrapt
-from ansible import constants, context
-from ansible.executor.playbook_executor import PlaybookExecutor
-from ansible.executor.task_executor import TaskExecutor
-from ansible.inventory.manager import InventoryManager
-from ansible.module_utils.common.collections import ImmutableDict
-from ansible.parsing.dataloader import DataLoader
-from ansible.playbook import Playbook
-from ansible.plugins.action.async_status import ActionModule
-from ansible.plugins.callback import CallbackBase
-from ansible.utils.display import Display
-from ansible.vars.manager import VariableManager
 from frappe.model.document import Document
-from frappe.utils import cstr
 from frappe.utils import now_datetime as now
 
 from press.press.doctype.ansible_play.ansible_play import AnsiblePlay
@@ -27,6 +19,18 @@ from press.press.doctype.ansible_play.ansible_play import AnsiblePlay
 if typing.TYPE_CHECKING:
 	from press.press.doctype.agent_job.agent_job import AgentJob
 	from press.press.doctype.virtual_machine.virtual_machine import VirtualMachine
+
+
+class ExternalAnsibleError(RuntimeError):
+	pass
+
+
+class _RunnerConstants:
+	# Keep a narrow compatibility shim for modules that only need Ansible's temp root.
+	DEFAULT_LOCAL_TMP = str(Path.home() / ".ansible" / "tmp" / "ansible-local-temp")
+
+
+constants = _RunnerConstants()
 
 
 def reconnect_on_failure():
@@ -43,51 +47,70 @@ def reconnect_on_failure():
 	return wrapper
 
 
-class AnsibleCallback(CallbackBase):
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
+class AnsibleEventHandler:
+	def __init__(self, play: str, tasks: dict[str, dict[str, str]], task_list: list[str]):
+		self.play = play
+		self.tasks = tasks
+		self.task_list = task_list
+
+	def handle_event(self, event: dict):
+		event_type = event.get("event")
+
+		if event_type == "play_start":
+			self.update_play("Running")
+			return
+
+		if event_type == "play_stats":
+			self.update_play(stats=event.get("stats") or {})
+			return
+
+		if event_type == "task_start":
+			self.update_task("Running", role=event.get("role"), task=event.get("task"))
+			return
+
+		if event_type == "task_result":
+			status = event.get("status")
+			result = event.get("result") or {}
+			role = event.get("role")
+			task = event.get("task")
+			self.update_task(status, role=role, task=task, result=result)
+			self.process_task_success(event.get("action"), result)
+			return
+
+		if event_type == "async_start":
+			self.on_async_start(event.get("role"), event.get("task"), event.get("job_id"))
+			return
+
+		if event_type == "async_poll":
+			self.on_async_poll(event.get("result") or {})
+			return
+
+		if event_type == "runner_error":
+			self.mark_runner_failure(event.get("message") or "External Ansible runner failed")
 
 	@reconnect_on_failure()
-	def process_task_success(self, result):
-		result, action = frappe._dict(result._result), result._task.action
-		if action == "user":
-			server_type, server = frappe.db.get_value("Ansible Play", self.play, ["server_type", "server"])
-			server = frappe.get_doc(server_type, server)
-			if result.name == "root":
-				server.root_public_key = result.ssh_public_key
-			elif result.name == "frappe":
-				server.frappe_public_key = result.ssh_public_key
-			server.save()
+	def process_task_success(self, action: str | None, result: dict):
+		if action != "user":
+			return
 
-	def v2_runner_on_ok(self, result, *args, **kwargs):
-		self.update_task("Success", result)
-		self.process_task_success(result)
+		server_type, server = frappe.db.get_value("Ansible Play", self.play, ["server_type", "server"])
+		server = frappe.get_doc(server_type, server)
 
-	def v2_runner_on_failed(self, result, *args, **kwargs):
-		self.update_task("Failure", result)
+		if result.get("name") == "root":
+			server.root_public_key = result.get("ssh_public_key")
+		elif result.get("name") == "frappe":
+			server.frappe_public_key = result.get("ssh_public_key")
+		else:
+			return
 
-	def v2_runner_on_skipped(self, result):
-		self.update_task("Skipped", result)
-
-	def v2_runner_on_unreachable(self, result):
-		self.update_task("Unreachable", result)
-
-	def v2_playbook_on_task_start(self, task, is_conditional):
-		self.update_task("Running", None, task)
-
-	def v2_playbook_on_start(self, playbook):
-		self.update_play("Running")
-
-	def v2_playbook_on_stats(self, stats):
-		self.update_play(None, stats)
+		server.save()
+		frappe.db.commit()
 
 	@reconnect_on_failure()
-	def update_play(self, status=None, stats=None):
+	def update_play(self, status: str | None = None, stats: dict | None = None):
 		play = frappe.get_doc("Ansible Play", self.play)
 		if stats:
-			# Assume we're running on one host
-			host = next(iter(stats.processed.keys()))
-			play.update(stats.summarize(host))
+			play.update(stats)
 			if play.failures or play.unreachable:
 				play.status = "Failure"
 			else:
@@ -102,34 +125,85 @@ class AnsibleCallback(CallbackBase):
 		frappe.db.commit()
 
 	@reconnect_on_failure()
-	def update_task(self, status, result=None, task=None):
-		if result:
-			if not result._task._role:
-				return
-			task_name, result = self.parse_result(result)
-		else:
-			if not task._role:
-				return
-			task_name = self.tasks[task._role.get_name()][task.name]
-		task = frappe.get_doc("Ansible Task", task_name)
-		task.status = status
-		if result:
-			task.output = result.stdout
-			task.error = result.stderr
-			task.exception = result.msg
-			# Reduce clutter be removing keys already shown elsewhere
+	def update_task(self, status: str, role: str | None = None, task: str | None = None, result: dict | None = None):
+		task_name = self._get_task_name(role, task)
+		if not task_name:
+			return
+
+		task_doc = frappe.get_doc("Ansible Task", task_name)
+		task_doc.status = status
+
+		if result is not None:
+			result = frappe._dict(result)
+			task_doc.output = self._coerce_log_value(result.get("stdout"))
+			task_doc.error = self._coerce_log_value(result.get("stderr"))
+			task_doc.exception = self._coerce_log_value(result.get("msg"))
 			for key in ("stdout", "stdout_lines", "stderr", "stderr_lines", "msg"):
 				result.pop(key, None)
-			task.result = json.dumps(result, indent=4)
-			task.end = now()
-			task.duration = task.end - task.start
+			task_doc.result = json.dumps(result, indent=4, default=str)
+			task_doc.end = now()
+			task_doc.duration = task_doc.end - task_doc.start
 		else:
-			task.start = now()
-		task.save()
-		self.publish_play_progress(task.name)
+			task_doc.start = now()
+
+		task_doc.save()
+		self.publish_play_progress(task_doc.name)
 		frappe.db.commit()
 
-	def publish_play_progress(self, task):
+	@reconnect_on_failure()
+	def on_async_start(self, role: str | None, task: str | None, job_id: str | None):
+		task_name = self._get_task_name(role, task)
+		if not task_name or not job_id:
+			return
+
+		task_doc = frappe.get_doc("Ansible Task", task_name)
+		task_doc.job_id = job_id
+		task_doc.save()
+		frappe.db.commit()
+
+	@reconnect_on_failure()
+	def on_async_poll(self, result: dict):
+		job_id = result.get("ansible_job_id")
+		if not job_id:
+			return
+
+		task_name = frappe.get_value("Ansible Task", {"play": self.play, "job_id": job_id}, "name")
+		if not task_name:
+			return
+
+		task_doc = frappe.get_doc("Ansible Task", task_name)
+		task_doc.result = json.dumps(result, indent=4, default=str)
+		task_doc.duration = now() - task_doc.start
+		task_doc.save()
+		frappe.db.commit()
+
+	@reconnect_on_failure()
+	def mark_runner_failure(self, message: str):
+		play = frappe.get_doc("Ansible Play", self.play)
+		play.status = "Failure"
+		if play.start and not play.end:
+			play.end = now()
+			play.duration = play.end - play.start
+		play.save()
+
+		running_tasks = frappe.get_all(
+			"Ansible Task",
+			filters={"play": self.play, "status": "Running"},
+			order_by="modified desc",
+			limit_page_length=1,
+			pluck="name",
+		)
+		if running_tasks:
+			task_doc = frappe.get_doc("Ansible Task", running_tasks[0])
+			task_doc.status = "Failure"
+			task_doc.exception = message
+			task_doc.end = now()
+			task_doc.duration = task_doc.end - task_doc.start
+			task_doc.save()
+
+		frappe.db.commit()
+
+	def publish_play_progress(self, task: str):
 		frappe.publish_realtime(
 			"ansible_play_progress",
 			{"progress": self.task_list.index(task), "total": len(self.task_list), "play": self.play},
@@ -138,131 +212,152 @@ class AnsibleCallback(CallbackBase):
 			user=frappe.session.user,
 		)
 
-	def parse_result(self, result):
-		task = result._task.name
-		role = result._task._role.get_name()
-		return self.tasks[role][task], frappe._dict(result._result)
+	def _get_task_name(self, role: str | None, task: str | None) -> str | None:
+		if not role or not task:
+			return None
+		return self.tasks.get(role, {}).get(task)
 
-	@reconnect_on_failure()
-	def on_async_start(self, role, task, job_id):
-		task_name = self.tasks[role][task]
-		task = frappe.get_doc("Ansible Task", task_name)
-		task.job_id = job_id
-		task.save()
-		frappe.db.commit()
-
-	@reconnect_on_failure()
-	def on_async_poll(self, result):
-		job_id = result["ansible_job_id"]
-		task_name = frappe.get_value("Ansible Task", {"play": self.play, "job_id": job_id}, "name")
-		task = frappe.get_doc("Ansible Task", task_name)
-		task.result = json.dumps(result, indent=4)
-		task.duration = now() - task.start
-		task.save()
-		frappe.db.commit()
+	def _coerce_log_value(self, value):
+		if value is None or isinstance(value, str):
+			return value
+		return json.dumps(value, indent=4, default=str)
 
 
 class Ansible:
 	def __init__(self, server, playbook, user="root", variables=None, port=22):
-		self.patch()
 		self.server = server
 		self.playbook = playbook
 		self.playbook_path = frappe.get_app_path("press", "playbooks", self.playbook)
 		self.host = server.ip if server.ip else server.private_ip
+		self.port = port
+		self.user = user
 		self.variables = variables or {}
-
-		constants.HOST_KEY_CHECKING = False
-		context.CLIARGS = ImmutableDict(
-			become_method="sudo",
-			check=False,
-			connection="ssh",
-			# This is the only way to pass variables that preserves newlines
-			extra_vars=[f"{cstr(key)}='{cstr(value)}'" for key, value in self.variables.items()],
-			remote_user=user,
-			start_at_task=None,
-			syntax=False,
-			verbosity=1,
-			ssh_common_args=self._get_ssh_proxy_commad(server),
-		)
-
-		self.loader = DataLoader()
-		self.passwords = dict({})
-
-		self.sources = f"{self.host},"
-		self.inventory = InventoryManager(loader=self.loader, sources=self.sources)
-		self.inventory.get_host(self.host).set_variable("ansible_port", port)
-
-		self.variable_manager = VariableManager(loader=self.loader, inventory=self.inventory)
-
-		self.callback = AnsibleCallback()
-		self.display = Display()
-		self.display.verbosity = 1
+		self.ssh_common_args = self._get_ssh_common_args(server)
+		self.bridge_python = self._get_bridge_python()
+		self.bridge_script = frappe.get_app_path("press", "scripts", "ansible_bridge.py")
 		self.create_ansible_play()
 
-	def _get_ssh_proxy_commad(self, server):
-		# Note: ProxyCommand must be enclosed in double quotes
-		# because it contains spaces
-		# and the entire argument must be enclosed in single quotes
-		# because it is passed via the CLI
-		# See https://docs.ansible.com/ansible/latest/user_guide/connection_details.html#ssh-args
-		# and https://unix.stackexchange.com/a/303717
-		# for details
-		proxy_command = None
+	def _get_ssh_common_args(self, server):
+		# Keep the SSH transport alive for quiet long-running tasks behind TCP stream proxies.
+		args = [
+			"-o ServerAliveInterval=30",
+			"-o ServerAliveCountMax=6",
+			"-o TCPKeepAlive=yes",
+		]
+
 		if hasattr(self.server, "bastion_host") and self.server.bastion_host:
-			proxy_command = f'-o ProxyCommand="ssh -W %h:%p \
-					{server.bastion_host.ssh_user}@{server.bastion_host.ip} \
-						-p {server.bastion_host.ssh_port}"'
+			args.append(
+				f'-o ProxyCommand="ssh -W %h:%p '
+				f"{server.bastion_host.ssh_user}@{server.bastion_host.ip} "
+				f'-p {server.bastion_host.ssh_port}"'
+			)
 
-		return proxy_command
+		return " ".join(args)
 
-	def patch(self):
-		def modified_action_module_run(*args, **kwargs):
-			result = self.action_module_run(*args, **kwargs)
-			self.callback.on_async_poll(result)
-			return result
+	def _get_bridge_python(self) -> str:
+		return (
+			os.environ.get("PRESS_ANSIBLE_RUNNER_PYTHON")
+			or frappe.conf.get("press_ansible_runner_python")
+			or str(Path.home() / ".press-ansible-runner" / "bin" / "python")
+		)
 
-		def modified_poll_async_result(executor, result, templar, task_vars=None):
-			job_id = result["ansible_job_id"]
-			task = executor._task
-			self.callback.on_async_start(task._role.get_name(), task.name, job_id)
-			return self._poll_async_result(executor, result, templar, task_vars=task_vars)
+	def _build_bridge_command(self, subcommand: str, extra_vars_file: str) -> list[str]:
+		command = [
+			self.bridge_python,
+			self.bridge_script,
+			subcommand,
+			"--playbook",
+			self.playbook_path,
+			"--host",
+			self.host,
+			"--port",
+			str(self.port),
+			"--user",
+			self.user,
+			"--extra-vars-file",
+			extra_vars_file,
+		]
+		if self.ssh_common_args:
+			command.extend(["--ssh-common-args", self.ssh_common_args])
+		return command
 
-		if ActionModule.run.__module__ != "press.runner":
-			self.action_module_run = ActionModule.run
-			ActionModule.run = modified_action_module_run
+	def _run_inspect(self) -> dict:
+		with NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+			json.dump(self.variables, handle)
+			handle.flush()
+			extra_vars_file = handle.name
 
-		if TaskExecutor.run.__module__ != "press.runner":
-			self._poll_async_result = TaskExecutor._poll_async_result
-			TaskExecutor._poll_async_result = modified_poll_async_result
+		try:
+			result = subprocess.run(
+				self._build_bridge_command("inspect", extra_vars_file),
+				capture_output=True,
+				text=True,
+				check=False,
+			)
+		finally:
+			Path(extra_vars_file).unlink(missing_ok=True)
 
-	def unpatch(self):
-		TaskExecutor._poll_async_result = self._poll_async_result
-		ActionModule.run = self.action_module_run
+		payload = self._extract_last_json_line(result.stdout)
+		if result.returncode != 0 or not payload:
+			message = (result.stderr or result.stdout or "Playbook inspection failed").strip()
+			raise ExternalAnsibleError(message)
+		return payload
+
+	def _extract_last_json_line(self, output: str) -> dict | None:
+		for line in reversed(output.splitlines()):
+			line = line.strip()
+			if not line:
+				continue
+			try:
+				return json.loads(line)
+			except json.JSONDecodeError:
+				continue
+		return None
 
 	def run(self) -> AnsiblePlay:
-		self.executor = PlaybookExecutor(
-			playbooks=[self.playbook_path],
-			inventory=self.inventory,
-			variable_manager=self.variable_manager,
-			loader=self.loader,
-			passwords=self.passwords,
-		)
-		# Use AnsibleCallback so we can receive updates for tasks execution
-		self.executor._tqm._stdout_callback = self.callback
-		self.callback.play = self.play
-		self.callback.tasks = self.tasks
-		self.callback.task_list = self.task_list
-		self.executor.run()
-		self.unpatch()
+		handler = AnsibleEventHandler(self.play, self.tasks, self.task_list)
+		bridge_logs: list[str] = []
+
+		with NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+			json.dump(self.variables, handle)
+			handle.flush()
+			extra_vars_file = handle.name
+
+		try:
+			process = subprocess.Popen(
+				self._build_bridge_command("run", extra_vars_file),
+				stdout=subprocess.PIPE,
+				stderr=subprocess.STDOUT,
+				text=True,
+				bufsize=1,
+			)
+
+			if process.stdout:
+				for raw_line in process.stdout:
+					line = raw_line.strip()
+					if not line:
+						continue
+					try:
+						event = json.loads(line)
+					except json.JSONDecodeError:
+						bridge_logs.append(line)
+						continue
+					handler.handle_event(event)
+
+			returncode = process.wait()
+		finally:
+			Path(extra_vars_file).unlink(missing_ok=True)
+
+		play = frappe.get_doc("Ansible Play", self.play)
+		if returncode != 0 and play.status not in ("Failure", "Success"):
+			message = "\n".join(bridge_logs) or "External Ansible runner exited unexpectedly"
+			handler.mark_runner_failure(message)
+			raise ExternalAnsibleError(message)
+
 		return frappe.get_doc("Ansible Play", self.play)
 
 	def create_ansible_play(self):
-		# Parse the playbook and create Ansible Tasks so we can show how many tasks are pending
-		playbook = Playbook.load(
-			self.playbook_path, variable_manager=self.variable_manager, loader=self.loader
-		)
-		# Assume we only have one play per playbook
-		play = playbook.get_plays()[0]
+		inspection = self._run_inspect()
 		play_doc = frappe.get_doc(
 			{
 				"doctype": "Ansible Play",
@@ -270,25 +365,29 @@ class Ansible:
 				"server": self.server.name,
 				"variables": json.dumps(self.variables, indent=4),
 				"playbook": self.playbook,
-				"play": play.get_name(),
+				"play": inspection["play"],
 			}
 		).insert()
+
 		self.play = play_doc.name
 		self.tasks = {}
 		self.task_list = []
-		for role in play.get_roles():
-			for block in role.get_task_blocks():
-				for task in block.block:
-					task_doc = frappe.get_doc(
-						{
-							"doctype": "Ansible Task",
-							"play": self.play,
-							"role": role.get_name(),
-							"task": task.name,
-						}
-					).insert()
-					self.tasks.setdefault(role.get_name(), {})[task.name] = task_doc.name
-					self.task_list.append(task_doc.name)
+		for task in inspection.get("tasks", []):
+			role = task.get("role")
+			name = task.get("task")
+			if not role or not name:
+				continue
+
+			task_doc = frappe.get_doc(
+				{
+					"doctype": "Ansible Task",
+					"play": self.play,
+					"role": role,
+					"task": name,
+				}
+			).insert()
+			self.tasks.setdefault(role, {})[name] = task_doc.name
+			self.task_list.append(task_doc.name)
 
 
 class Status(str, Enum):
@@ -417,60 +516,3 @@ class StepHandler:
 			if hasattr(method_object, method_name):
 				return getattr(method_object, method_name)
 		return getattr(self, method_name)
-
-	def next_step(self, steps: list[GenericStep]) -> GenericStep | None:
-		for step in steps:
-			if step.status not in (Status.Success, Status.Failure, Status.Skipped):
-				return step
-
-		return None
-
-	def _execute_steps(
-		self,
-		steps: list[GenericStep],
-		commit: bool = False,
-		start_status: str = Status.Running,
-		success_status: str = Status.Success,
-		failure_status: str = Status.Failure,
-		method_objects: list[object] | None = None,
-	):
-		"""It is now required to be with a `enqueue_doc` else the first step executes in the web worker"""
-		self.status = start_status
-		self.save()
-
-		step = self.next_step(steps)
-		if not step:
-			self.succeed(success_status)
-			return
-
-		# Run a single step in this job
-		step = step.reload()
-		method = self._get_method(method_objects=method_objects, method_name=step.method_name)
-
-		try:
-			method(step)
-		except Exception:
-			self.reload()
-			self.fail(failure_status)
-			self.handle_step_failure()
-			return
-
-		if commit:
-			frappe.db.commit()
-
-		# After step completes, queue the next step
-		frappe.enqueue_doc(
-			self.doctype,
-			self.name,
-			"_execute_steps",
-			method_objects=method_objects,
-			steps=steps,
-			commit=commit,
-			start_status=start_status,
-			success_status=success_status,
-			failure_status=failure_status,
-			timeout=18000,
-			at_front=True,
-			queue="long",
-			enqueue_after_commit=True,
-		)

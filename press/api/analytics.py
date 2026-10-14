@@ -712,7 +712,9 @@ def get(name: str, timezone: str, start: str, end: str):
 	end_dt = parse_iso_datetime(end)
 	_, timegrain = auto_timespan_timegrain(start_dt, end_dt)
 
-	request_data = get_usage(name, "request", timezone, start_dt, end_dt, timegrain)
+	request_data, usage_error = get_usage(
+		name, "request", timezone, start_dt, end_dt, timegrain, return_error=True
+	)
 	uptime_data = get_uptime(name, timezone, start_dt, end_dt, timegrain)
 
 	plan = frappe.get_cached_doc("Site", name).plan
@@ -725,6 +727,7 @@ def get(name: str, timezone: str, start: str, end: str):
 		"uptime": uptime_data,
 		"plan_limit": plan_limit,
 		"timegrain": timegrain,
+		"analytics_error": {"usage": usage_error} if usage_error else {},
 	}
 
 
@@ -904,13 +907,14 @@ def daily_usage(name: str, timezone: str):
 	end = datetime.now(pytz_timezone(timezone))
 	start = frappe.utils.add_to_date(end, seconds=-timespan)
 
-	request_data = get_usage(
+	request_data, usage_error = get_usage(
 		name,
 		"request",
 		timezone,
 		start,
 		end,
 		timegrain,
+		return_error=True,
 	)
 
 	plan = frappe.get_cached_doc("Site", name).plan
@@ -918,6 +922,7 @@ def daily_usage(name: str, timezone: str):
 	return {
 		"data": [{"value": r.max, "date": r.date} for r in request_data],
 		"plan_limit": get_plan_config(plan)["rate_limit"]["limit"] if plan else 0,
+		"analytics_error": {"usage": usage_error} if usage_error else {},
 	}
 
 
@@ -1332,10 +1337,19 @@ class GenerateReportReports(BackgroundJobGroupByChart):
 				self.search = self.search.exclude("match_phrase", json__site=path)
 
 
-def get_usage(site: str, type: str, timezone: str, start: datetime, end: datetime, timegrain: int):
+def get_usage(
+	site: str,
+	type: str,
+	timezone: str,
+	start: datetime,
+	end: datetime,
+	timegrain: int,
+	return_error: bool = False,
+):
 	log_server = frappe.db.get_single_value("Press Settings", "log_server")
 	if not log_server:
-		return {"datasets": [], "labels": []}
+		error = "Usage analytics temporarily unavailable. Log analytics backend is not configured."
+		return ([], error) if return_error else []
 
 	url = f"https://{log_server}/elasticsearch/filebeat-*/_search"
 	password = get_decrypted_password("Log Server", log_server, "kibana_password")
@@ -1373,12 +1387,20 @@ def get_usage(site: str, type: str, timezone: str, start: datetime, end: datetim
 		},
 	}
 
-	response = requests.post(url, json=query, auth=("frappe", password)).json()
+	try:
+		response_obj = requests.post(url, json=query, auth=("frappe", password), timeout=30)
+		response_obj.raise_for_status()
+		response = response_obj.json()
+	except Exception:
+		frappe.log_error(title="Site Analytics Usage Error", message=frappe.get_traceback())
+		error = "Usage analytics temporarily unavailable. Log analytics backend is not responding."
+		return ([], error) if return_error else []
 
 	buckets: list[UsagePoint] = []
 
 	if not response.get("aggregations"):
-		return {"datasets": [], "labels": []}
+		error = "Usage analytics temporarily unavailable. Log analytics backend returned an unexpected response."
+		return ([], error) if return_error else []
 
 	for bucket in response["aggregations"]["date_histogram"]["buckets"]:
 		buckets.append(
@@ -1394,7 +1416,7 @@ def get_usage(site: str, type: str, timezone: str, start: datetime, end: datetim
 				}
 			)
 		)
-	return buckets
+	return (buckets, None) if return_error else buckets
 
 
 def get_current_cpu_usage(site: str):

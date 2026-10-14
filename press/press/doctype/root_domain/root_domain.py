@@ -131,8 +131,14 @@ class RootDomain(Document):
 	def get_active_sites(self):
 		return frappe.get_all("Site", {"status": ("!=", "Archived"), "domain": self.name}, pluck="name")
 
+	def get_active_code_servers(self):
+		return frappe.get_all(
+			"Code Server", {"status": ("!=", "Archived"), "domain": self.name}, pluck="name"
+		)
+
 	def get_active_domains(self):
 		active_domains = self.get_active_sites()
+		active_domains.extend(self.get_active_code_servers())
 		active_domains.extend(self.get_sites_being_renamed())
 		active_domains.extend(self.get_active_site_domains())
 		return set(active_domains)
@@ -147,6 +153,8 @@ class RootDomain(Document):
 
 		default_proxies = self.get_default_cluster_proxies()
 
+		root_suffix = f".{self.name}"
+
 		for page in self.get_dns_record_pages():
 			to_delete = []
 
@@ -158,6 +166,8 @@ class RootDomain(Document):
 				value = record["ResourceRecords"][0]["Value"]
 				if record["Type"] == "CNAME" and value in proxies:
 					domain = record["Name"].strip(".")
+					if domain != self.name and not domain.endswith(root_suffix):
+						continue
 					# Delete inactive records
 					if domain not in active_domains:  # noqa: SIM114
 						record["Name"] = domain
@@ -233,7 +243,7 @@ class RootDomain(Document):
 
 
 def cleanup_cname_records():
-	domains = frappe.get_all("Root Domain", pluck="name")
+	domains = frappe.get_all("Root Domain", {"enabled": True}, pluck="name")
 	for domain_name in domains:
 		domain = RootDomain("Root Domain", domain_name)
 		if domain.generic_dns_provider:
@@ -245,6 +255,78 @@ def cleanup_cname_records():
 @redis_cache(ttl=3600)
 def get_domains():
 	return frappe.get_all("Root Domain", filters={"enabled": ["=", "1"]}, pluck="name")
+
+
+def get_team_domains(team: str | None) -> list[str]:
+	if not team:
+		return []
+
+	return frappe.get_all(
+		"Root Domain",
+		filters={"enabled": ["=", "1"], "team": team},
+		pluck="name",
+		order_by="creation asc",
+	)
+
+
+def get_available_domains_for_team(
+	team: str | None, cluster: str | None = None, proxy_server: str | None = None
+) -> list[str]:
+	"""Return enabled domains owned by the team or shared with it.
+
+	When a deployment target is known, only return domains configured on an
+	active proxy for that target.  This prevents presenting a hostname that the
+	selected region cannot serve.
+	"""
+	root_domains = frappe.get_all("Root Domain", filters={"enabled": 1}, fields=["name", "team"])
+	root_domains = [domain for domain in root_domains if not domain.team or domain.team == team]
+
+	if not cluster and not proxy_server:
+		return sorted(domain.name for domain in root_domains)
+
+	proxies = [proxy_server] if proxy_server else frappe.get_all(
+		"Proxy Server", {"cluster": cluster, "status": "Active"}, pluck="name"
+	)
+	if not proxies:
+		return []
+
+	proxy_domains = set(
+		frappe.get_all(
+			"Proxy Server Domain", {"parent": ("in", proxies)}, pluck="domain"
+		)
+	)
+	return sorted(domain.name for domain in root_domains if domain.name in proxy_domains)
+
+
+def get_default_domain_for_team(team: str | None) -> str:
+	team_domains = get_team_domains(team)
+	if team_domains:
+		return team_domains[0]
+
+	return frappe.db.get_single_value("Press Settings", "domain")
+
+
+def validate_team_domain(team: str | None, domain: str | None):
+	if domain and not frappe.db.exists("Root Domain", {"name": domain, "enabled": 1}):
+		frappe.throw(f"Root domain {frappe.bold(domain)} is disabled or does not exist.")
+
+	domain_team = frappe.db.get_value("Root Domain", domain, "team") if domain else None
+	if domain_team and domain_team != team:
+		frappe.throw(
+			f"Root domain {frappe.bold(domain)} belongs to another team."
+		)
+
+
+def validate_domain_for_deployment(
+	team: str | None, domain: str | None, cluster: str | None = None, proxy_server: str | None = None
+):
+	validate_team_domain(team, domain)
+	if domain and (cluster or proxy_server) and domain not in get_available_domains_for_team(
+		team, cluster, proxy_server
+	):
+		frappe.throw(
+			f"Root domain {frappe.bold(domain)} is not configured on an active proxy for the selected deployment target."
+		)
 
 
 def get_matching_domain(domain: str) -> str | None:

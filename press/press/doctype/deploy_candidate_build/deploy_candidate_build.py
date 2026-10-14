@@ -425,11 +425,16 @@ class DeployCandidateBuild(Document):
 
 		return load_pyproject(app, pyproject_path)
 
+	def _save_preparation_progress(self):
+		"""Expose completed checkpoints before starting slow filesystem/network work."""
+		self.save(ignore_version=True)
+		frappe.db.commit()
+
 	def _clone_release_and_update_step(self, release, step):
 		step.cached = False
 		step.status = "Running"
 		start_time = now()
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 
 		release: AppRelease = frappe.get_doc("App Release", release, for_update=True)
 		release._clone(force=True)
@@ -472,6 +477,7 @@ class DeployCandidateBuild(Document):
 		for app in self.candidate.apps:
 			repo_path_map[app.app] = self._clone_app(app)
 			app.app_name = self._get_app_name(app.app)
+			self._save_preparation_progress()
 
 		return repo_path_map
 
@@ -479,7 +485,7 @@ class DeployCandidateBuild(Document):
 		step = self.get_step("validate", "pre-build")
 		step.status = "Running"
 		start_time = now()
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 
 		try:
 			PreBuildValidations(self.candidate, pmf).validate()
@@ -491,7 +497,7 @@ class DeployCandidateBuild(Document):
 		step.duration = get_duration(start_time)
 		step.output = "Pre-Build validations passed"
 		step.status = "Success"
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 
 	def add_post_build_steps(self):
 		slugs = []
@@ -922,7 +928,7 @@ class DeployCandidateBuild(Document):
 		step = self.get_step("upload", "context") or frappe._dict()
 		step.status = "Running"
 		start_time = now()
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 
 		try:
 			upload_filename = self.upload_build_context_for_docker_build(
@@ -935,14 +941,14 @@ class DeployCandidateBuild(Document):
 
 		step.status = "Success"
 		step.duration = get_duration(start_time)
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 		return upload_filename
 
 	def _package_build_context(self):
 		step = self.get_step("package", "context") or frappe._dict()
 		step.status = "Running"
 		start_time = now()
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 
 		def fix_content_permission(tarinfo):
 			tarinfo.uid = 1000
@@ -958,7 +964,7 @@ class DeployCandidateBuild(Document):
 
 		step.status = "Success"
 		step.duration = get_duration(start_time)
-		self.save(ignore_version=True)
+		self._save_preparation_progress()
 
 		return tmp_file_path
 
@@ -1182,11 +1188,12 @@ class DeployCandidateBuild(Document):
 		frappe.db.commit()
 
 	def on_update(self):
-		if self.status == "Running":
+		if self.status in ("Preparing", "Running"):
 			frappe.publish_realtime(
 				f"bench_deploy:{self.name}:steps",
 				doctype=self.doctype,
 				docname=self.name,
+				after_commit=True,
 				message={"steps": self.build_steps, "name": self.name},
 			)
 		else:
@@ -1194,6 +1201,7 @@ class DeployCandidateBuild(Document):
 				f"bench_deploy:{self.name}:finished",
 				doctype=self.doctype,
 				docname=self.name,
+				after_commit=True,
 			)
 
 		if self.has_value_changed("status") and self.team != "Administrator":
@@ -1690,4 +1698,7 @@ def on_doctype_update():
 		return
 	# Ignoring filesorts
 	# https://dev.mysql.com/doc/refman/8.4/en/order-by-optimization.html#order-by-index-use
-	frappe.db.add_index("Deploy Candidate Build", ["team", "group", "creation"])
+	frappe.db.sql(
+		"""ALTER TABLE `tabDeploy Candidate Build`
+		ADD INDEX IF NOT EXISTS `team_group_creation_index`(`team`, `group`, `creation`)"""
+	)

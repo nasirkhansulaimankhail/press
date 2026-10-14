@@ -2,6 +2,14 @@ from press.api.account import get_frappe_io_auth_url
 
 from . import __version__ as app_version
 
+
+def get_frappe_io_auth_url_for_hooks():
+	try:
+		return get_frappe_io_auth_url()
+	except RuntimeError:
+		return None
+
+
 app_name = "press"
 app_title = "Press"
 app_publisher = "Frappe"
@@ -69,7 +77,7 @@ website_route_rules = [
 ]
 
 website_redirects = [
-	{"source": "/dashboard/f-login", "target": get_frappe_io_auth_url() or "/"},
+	{"source": "/dashboard/f-login", "target": get_frappe_io_auth_url_for_hooks() or "/"},
 	{
 		"source": "/suspended-site",
 		"target": "/api/method/press.api.handle_suspended_site_redirection",

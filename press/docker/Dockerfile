@@ -89,7 +89,9 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt curl -fsSL https://p
 
 # Install Python from DeadSnakes PPA
 ENV {{ doc.get_dependency_version("python", True) }}
-RUN --mount=type=cache,sharing=locked,target=/var/cache/apt add-apt-repository ppa:deadsnakes/ppa \
+RUN --mount=type=cache,sharing=locked,target=/var/cache/apt curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xBA6932366A755776" \
+  | gpg --dearmor -o /usr/share/keyrings/deadsnakes-archive-keyring.gpg \
+  && echo "deb [signed-by=/usr/share/keyrings/deadsnakes-archive-keyring.gpg] https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes.list \
   && apt-get update \
   && apt-get install --yes --no-install-suggests --no-install-recommends \
   python${PYTHON_VERSION} \

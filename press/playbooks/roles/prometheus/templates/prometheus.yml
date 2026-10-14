@@ -92,7 +92,7 @@ scrape_configs:
     metrics_path: /blackbox/probe
     scheme: https
     params:
-      module: [http_2xx]
+      module: [http_tls]
     basic_auth:
       username: frappe
       password: '{{ grafana_password }}'

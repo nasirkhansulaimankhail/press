@@ -25,6 +25,7 @@ from press.utils.billing import (
 	get_razorpay_client,
 	get_stripe,
 	is_frappe_auth_disabled,
+	is_stripe_enabled,
 	process_micro_debit_test_charge,
 )
 from press.utils.jobs import has_job_timeout_exceeded
@@ -686,6 +687,9 @@ class Team(Document):
 		return unpaid_invoices
 
 	def create_stripe_customer(self):
+		if not is_stripe_enabled():
+			return
+
 		if not self.stripe_customer_id:
 			stripe = get_stripe()
 			customer = stripe.Customer.create(email=self.user, name=get_fullname(self.user))
