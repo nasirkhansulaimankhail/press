@@ -12,10 +12,7 @@ from typing import Tuple, TypedDict
 
 CommandOutput = TypedDict(
 	"CommandOutput",
-	cwd=str,
-	image_tag=str,
-	returncode=int,
-	output=str,
+	{"cwd": str, "image_tag": str, "returncode": int, "output": str},
 )
 
 
