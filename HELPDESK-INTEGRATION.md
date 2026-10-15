@@ -4,7 +4,7 @@ This branch is based on `univentures/current`, preserving the deployed Press sou
 
 The Helpdesk option implementation now lives in the paired local Frappe app `apps/univentures_press_custom`, branch `integration/helpdesk-extraction`. This Press branch keeps four non-guest whitelisted compatibility routes in `press/api/helpdesk_options.py`. They delegate to the byte-identical extracted implementation. No team/child-team or server-selection logic is duplicated in these wrappers.
 
-Install the custom app on an isolated staging bench before enabling this Press branch's routes. The app requires Press and Helpdesk; its lifecycle hooks preserve existing ticket fields/template properties and move known Default template bindings to the new endpoints. Do not deploy the compatibility shim by itself. Both old and new route names require Frappe's authenticated whitelist dispatch.
+Install the custom app on an isolated staging bench before enabling this Press branch's routes. The app requires Press and Helpdesk; its lifecycle hooks preserve existing ticket fields/template properties and move known Default template bindings to the new endpoints. Do not deploy the compatibility shim by itself. Both old and new route names require Frappe's authenticated whitelist dispatch. Press auth explicitly permits only the four extracted option routes, matching the reachability of the old press.api routes. It does not allow the entire custom-app namespace or broaden Helpdesk ticket permissions.
 
 The existing local Support URL `/helpdesk/my-tickets/new` is unchanged. No frontend bundle or Agent changes are part of this extraction.
 

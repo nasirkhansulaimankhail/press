@@ -12,6 +12,11 @@ PRESS_AUTH_MAX_ENTRIES = 1000000
 
 
 ALLOWED_PATHS = [
+	# Exact equivalents of the existing authenticated Helpdesk option routes.
+	"/api/method/univentures_press_custom.api.helpdesk_options.get_site_options",
+	"/api/method/univentures_press_custom.api.helpdesk_options.get_app_options",
+	"/api/method/univentures_press_custom.api.helpdesk_options.get_bench_options",
+	"/api/method/univentures_press_custom.api.helpdesk_options.get_server_options",
 	"/api/method/create-site-migration",
 	"/api/method/create-version-upgrade",
 	"/api/method/migrate-to-private-bench",
