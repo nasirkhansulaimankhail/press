@@ -26,7 +26,7 @@ body {
 	--surface-modal: var(--surface-cards);
 }
 
-/* needed as theme switcher dynamically adds this class 
+/* needed as theme switcher dynamically adds this class
  * since many frappe-ui components use transitions
  * fixes flash bang during theme switching */
 .no-transition *,

@@ -211,7 +211,7 @@ const tabs = [
   { label: "Requests", icon: LucideKeySquare },
   { label: "Unread", icon: LucideMessageSquareDot },
 ];
-  
+
 const stopIfLink = (event) => {
   if (event.target.closest("a")) event.stopPropagation();
 };
@@ -225,8 +225,8 @@ useRealtimeNotifs((data) => {
     <Popover :placement="isMobile() ? 'top-start' : 'right-start'" popover-class="-mt-[15%] md:-mt-2.5">
     <!-- sidebar item -->
     <template #target="{ togglePopover }">
-      <Item is='BUTTON' v-bind='$attrs' aria-label="Notifications btn" name='Notifications' @click="togglePopover" 
-      				:suffix="unreadNotificationsCount.data > 99 ? '99+': unreadNotificationsCount.data"
+      <Item is='BUTTON' v-bind='$attrs' aria-label="Notifications btn" name='Notifications' @click="togglePopover"
+				:suffix="unreadNotificationsCount.data > 99 ? '99+': unreadNotificationsCount.data"
             >
         <template #prefix>
 
