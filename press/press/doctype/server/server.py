@@ -1066,7 +1066,7 @@ class BaseServer(Document, TagHelpers):
 		frappe.enqueue_doc(self.doctype, self.name, "_update_agent_ansible", queue="long", timeout=3600)
 
 	def validate_agent_update_allowed(self):
-		if self.disable_agent_update:
+		if self.get("disable_agent_update"):
 			frappe.throw(f"Agent update is disabled on {self.name}")
 
 	def _update_agent_ansible(self, throw_on_failure: bool = False):
