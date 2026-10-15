@@ -1,25 +1,31 @@
-import { defineAsyncComponent, h } from 'vue';
-import { toast } from 'vue-sonner';
-import LucideAppWindow from '~icons/lucide/app-window';
-import ServerActions from '../components/server/ServerActions.vue';
-import { getTeam } from '../data/team';
-import router from '../router';
-import { confirmDialog, icon, renderDialog } from '../utils/components';
-import { isMobile } from '../utils/device';
-import { date, duration, planTitle, userCurrency } from '../utils/format';
-import { getQueryParam, setQueryParam } from '../utils/index';
-import { trialDays } from '../utils/site';
-import { getJobsTab } from './common/jobs';
-import { tagTab } from './common/tags';
+import { defineAsyncComponent, h } from 'vue'
+import { toast } from 'vue-sonner'
+import LucideAppWindow from '~icons/lucide/app-window'
+import ServerActions from '../components/server/ServerActions.vue'
+import { getTeam } from '../data/team'
+import router from '../router'
+import { confirmDialog, icon, renderDialog } from '../utils/components'
+import { isMobile } from '../utils/device'
+import { date, duration, planTitle, userCurrency } from '../utils/format'
+import { getQueryParam, setQueryParam } from '../utils/index'
+import { trialDays } from '../utils/site'
+import { getJobsTab } from './common/jobs'
+import { tagTab } from './common/tags'
 
 export default {
 	doctype: 'Server',
+	list: {
+		title: 'Servers',
+		route: '/servers',
+		component: () => import('../pages/servers/list/Page.vue'),
+	},
 	whitelistedMethods: {
 		increaseDiskSize: 'increase_disk_size_for_server',
 		configureAutoAddStorage: 'configure_auto_add_storage',
 		changePlan: 'change_plan',
 		toggleAutoIncreaseStorage: 'toggle_auto_increase_storage',
 		reboot: 'reboot',
+		getSSHCommand: 'get_ssh_command',
 		rename: 'rename',
 		cleanup: 'cleanup_unused_files',
 		dropServer: 'drop_server',
@@ -34,102 +40,7 @@ export default {
 		scaleDown: 'scale_down',
 		addAutomatedScalingTriggers: 'add_automated_scaling_triggers',
 		removeAutomatedScalingTriggers: 'remove_automated_scaling_triggers',
-	},
-	list: {
-		route: '/servers',
-		title: 'Servers',
-		fields: [
-			'title',
-			'database_server',
-			'plan.title as plan_title',
-			'plan.price_usd as price_usd',
-			'plan.price_inr as price_inr',
-			'cluster.image as cluster_image',
-			'cluster.title as cluster_title',
-			'is_unified_server',
-		],
-		searchField: 'title',
-		filterControls() {
-			return [
-				{
-					type: 'select',
-					label: 'Status',
-					fieldname: 'status',
-					options: ['', 'Active', 'Pending', 'Archived'],
-				},
-				{
-					type: 'select',
-					label: 'Region',
-					fieldname: 'cluster',
-					options: [
-						'',
-						'Bahrain',
-						'Cape Town',
-						'Frankfurt',
-						'KSA',
-						'London',
-						'Mumbai',
-						'Singapore',
-						'UAE',
-						'Virginia',
-						'Zurich',
-					],
-				},
-			];
-		},
-		orderBy: 'creation desc',
-		columns: [
-			{
-				label: 'Server',
-				fieldname: 'name',
-				width: 1.5,
-				class: 'font-medium',
-				format(value, row) {
-					return row.title || value;
-				},
-			},
-			{ label: 'Status', fieldname: 'status', type: 'Badge', width: 0.8 },
-			{
-				label: 'App Server Plan',
-				format(value, row) {
-					return planTitle(row);
-				},
-			},
-			{
-				label: 'Database Server Plan',
-				fieldname: 'db_plan',
-				format(value, row) {
-					if (!value || row.is_unified_server) return '';
-					return planTitle(value);
-				},
-			},
-			{
-				label: 'Region',
-				fieldname: 'cluster',
-				format(value, row) {
-					return row.cluster_title || value;
-				},
-				prefix(row) {
-					return h('img', {
-						src: row.cluster_image,
-						class: 'w-4 h-4',
-						alt: row.cluster_title,
-					});
-				},
-			},
-		],
-		primaryAction({ listResource: servers }) {
-			return {
-				label: 'New Server',
-				variant: 'solid',
-				slots: {
-					prefix: icon('plus'),
-				},
-				onClick() {
-					router.push({ name: 'New Server' });
-				},
-			};
-		},
+		toggleMalwareScan: 'toggle_malware_scan',
 	},
 	detail: {
 		titleField: 'name',
@@ -137,7 +48,7 @@ export default {
 		statusBadge({ documentResource: server }) {
 			return {
 				label: server.doc.status,
-			};
+			}
 		},
 		breadcrumbs({ documentResource: server }) {
 			return [
@@ -149,13 +60,13 @@ export default {
 					label: server.doc.title || server.doc.name,
 					route: `/servers/${server.doc.name}`,
 				},
-			];
+			]
 		},
 		actions({ documentResource: server }) {
-			let $team = getTeam();
+			let $team = getTeam()
 
 			if (server?.doc?.status === 'Archived') {
-				return [];
+				return []
 			}
 
 			return [
@@ -170,7 +81,7 @@ export default {
 					condition: () =>
 						$team.doc?.is_desk_user && server.doc.team !== $team.name,
 					onClick() {
-						switchToTeam(server.doc.team);
+						switchToTeam(server.doc.team)
 					},
 				},
 				{
@@ -194,7 +105,7 @@ export default {
 										server.doc.name
 									}`,
 									'_blank',
-								);
+								)
 							},
 						},
 						{
@@ -207,7 +118,7 @@ export default {
 										window.location.host
 									}/app/database-server/${server.doc.database_server}`,
 									'_blank',
-								);
+								)
 							},
 						},
 						{
@@ -221,7 +132,17 @@ export default {
 										window.location.host
 									}/app/database-server/${server.doc.replication_server}`,
 									'_blank',
-								);
+								)
+							},
+						},
+						{
+							label: 'Copy SSH Command',
+							icon: icon('clipboard'),
+							condition: () => $team.doc?.is_desk_user,
+							async onClick() {
+								const command = await server.getSSHCommand.submit()
+								await navigator.clipboard.writeText(command)
+								toast.success('SSH command copied to clipboard')
 							},
 						},
 						{
@@ -230,19 +151,19 @@ export default {
 							condition: () =>
 								server.doc.status === 'Active' && $team.doc?.is_desk_user,
 							onClick() {
-								window.open(`https://${server.doc.name}`, '_blank');
+								window.open(`https://${server.doc.name}`, '_blank')
 							},
 						},
 					],
 				},
-			];
+			]
 		},
 		tabs: [
 			{
 				label: 'Overview',
 				icon: icon('home'),
 				condition: (server) => {
-					return server.doc?.status !== 'Archived';
+					return server.doc?.status !== 'Archived'
 				},
 				route: 'overview',
 				type: 'Component',
@@ -250,7 +171,7 @@ export default {
 					() => import('../components/server/ServerOverview.vue'),
 				),
 				props: (server) => {
-					return { server: server.doc.name };
+					return { server: server.doc.name }
 				},
 			},
 			{
@@ -265,7 +186,7 @@ export default {
 				props: (server) => {
 					return {
 						serverName: server.doc.name,
-					};
+					}
 				},
 			},
 			{
@@ -278,21 +199,21 @@ export default {
 					() => import('../components/server/ReleaseGroupCharts.vue'),
 				),
 				props: (server) => {
-					return { serverName: server.doc.name };
+					return { serverName: server.doc.name }
 				},
 			},
 			{
 				label: 'Sites',
 				icon: icon(LucideAppWindow),
 				condition: (server) => {
-					return server.doc?.status !== 'Archived';
+					return server.doc?.status !== 'Archived'
 				},
 				route: 'sites',
 				type: 'list',
 				list: {
 					doctype: 'Site',
 					filters: (server) => {
-						return { server: server.doc.name };
+						return { server: server.doc.name }
 					},
 					fields: [
 						'plan.plan_title as plan_title',
@@ -307,7 +228,7 @@ export default {
 					orderBy: 'creation desc',
 					searchField: 'host_name',
 					route(row) {
-						return { name: 'Site Detail', params: { name: row.name } };
+						return { name: 'Site Detail', params: { name: row.name } }
 					},
 					filterControls() {
 						return [
@@ -315,7 +236,24 @@ export default {
 								type: 'select',
 								label: 'Status',
 								fieldname: 'status',
-								options: ['', 'Active', 'Inactive', 'Suspended', 'Broken'],
+								options: [
+									'',
+									'Active',
+									'Inactive',
+									'Suspended',
+									'Broken',
+									'Archived',
+								],
+							},
+							{
+								type: 'select',
+								label: 'Plan',
+								fieldname: 'plan.support_included',
+								options: [
+									{ label: 'All', value: null },
+									{ label: 'Supported', value: '1' },
+									{ label: 'Not Supported', value: '0' },
+								],
 							},
 							{
 								type: 'link',
@@ -344,7 +282,7 @@ export default {
 									},
 								},
 							},
-						];
+						]
 					},
 					columns: [
 						{
@@ -353,7 +291,7 @@ export default {
 							width: 1.5,
 							class: 'font-medium',
 							format(value, row) {
-								return value || row.name;
+								return value || row.name
 							},
 						},
 						{ label: 'Status', fieldname: 'status', type: 'Badge', width: 0.6 },
@@ -363,18 +301,18 @@ export default {
 							width: 0.85,
 							format(value, row) {
 								if (row.trial_end_date) {
-									return trialDays(row.trial_end_date);
+									return trialDays(row.trial_end_date)
 								}
-								let $team = getTeam();
+								let $team = getTeam()
 								if (row.price_usd > 0) {
-									let india = $team.doc.country == 'India';
+									let india = $team.doc.country == 'India'
 									let formattedValue = userCurrency(
 										india ? row.price_inr : row.price_usd,
 										0,
-									);
-									return `${formattedValue}/mo`;
+									)
+									return `${formattedValue}/mo`
 								}
-								return row.plan_title;
+								return row.plan_title
 							},
 						},
 						{
@@ -389,7 +327,7 @@ export default {
 						},
 					],
 					primaryAction({ documentResource: server }) {
-						if (server?.doc?.status !== 'Active') return {};
+						if (server?.doc?.status !== 'Active') return {}
 						return {
 							label: 'New Site',
 							slots: {
@@ -399,9 +337,9 @@ export default {
 								router.push({
 									name: 'Server New Site',
 									params: { server: server.doc.name },
-								});
+								})
 							},
-						};
+						}
 					},
 				},
 			},
@@ -409,14 +347,14 @@ export default {
 				label: 'Benches',
 				icon: icon('package'),
 				condition: (server) => {
-					return server.doc?.status !== 'Archived';
+					return server.doc?.status !== 'Archived'
 				},
 				route: 'groups',
 				type: 'list',
 				list: {
 					doctype: 'Release Group',
 					filters: (server) => {
-						return { server: server.doc.name };
+						return { server: server.doc.name }
 					},
 					fields: [{ apps: ['app'] }, { servers: ['server'] }],
 					columns: [
@@ -427,8 +365,8 @@ export default {
 							type: 'Badge',
 							width: 0.5,
 							format: (value, row) => {
-								if (!value) return 'Awaiting Deploy';
-								else return 'Active';
+								if (!value) return 'Awaiting Deploy'
+								else return 'Active'
 							},
 						},
 						{
@@ -440,7 +378,7 @@ export default {
 							label: 'Apps',
 							fieldname: 'app',
 							format: (value, row) => {
-								return (row.apps || []).map((d) => d.app).join(', ');
+								return (row.apps || []).map((d) => d.app).join(', ')
 							},
 							width: '25rem',
 						},
@@ -471,16 +409,16 @@ export default {
 									},
 								},
 							},
-						];
+						]
 					},
 					route(row) {
 						return {
 							name: 'Release Group Detail',
 							params: { name: row.name },
-						};
+						}
 					},
 					primaryAction({ listResource: benches, documentResource: server }) {
-						if (server?.doc?.status !== 'Active') return {};
+						if (server?.doc?.status !== 'Active') return {}
 						return {
 							label: 'New Bench',
 							slots: {
@@ -490,9 +428,9 @@ export default {
 								router.push({
 									name: 'Server New Release Group',
 									params: { server: server.doc.name },
-								});
+								})
 							},
-						};
+						}
 					},
 				},
 			},
@@ -500,8 +438,8 @@ export default {
 				label: 'Snapshots',
 				icon: icon('camera'),
 				condition: (server) => {
-					if (!server?.doc) return true;
-					return server?.doc?.provider === 'AWS EC2';
+					if (!server?.doc) return true
+					return server?.doc?.provider === 'AWS EC2'
 				},
 				route: 'snapshots',
 				type: 'list',
@@ -510,15 +448,15 @@ export default {
 					filters: (server) => {
 						let filters = {
 							app_server: server.doc?.name,
-						};
-						const snapshot_name = getQueryParam('name');
-						if (snapshot_name) {
-							filters.name = snapshot_name;
 						}
-						return filters;
+						const snapshot_name = getQueryParam('name')
+						if (snapshot_name) {
+							filters.name = snapshot_name
+						}
+						return filters
 					},
 					filterControls() {
-						const snapshot_name = getQueryParam('name');
+						const snapshot_name = getQueryParam('name')
 						let filters = snapshot_name
 							? [
 									{
@@ -541,19 +479,19 @@ export default {
 											'Unavailable',
 										],
 									},
-								];
+								]
 						filters = filters.concat([
 							{
 								type: 'checkbox',
 								label: 'Consistent',
 								fieldname: 'consistent',
 							},
-						]);
-						return filters;
+						])
+						return filters
 					},
 					searchField: getQueryParam('name') ? null : 'name',
 					updateFilters({ name }) {
-						setQueryParam('name', name);
+						setQueryParam('name', name)
 					},
 					autoReloadAfterUpdateFilterCallback: true,
 					orderBy: 'creation desc',
@@ -586,8 +524,8 @@ export default {
 							width: 0.5,
 							align: 'center',
 							format(value) {
-								if (!value) return '-';
-								return `${value} GB`;
+								if (!value) return '-'
+								return `${value} GB`
 							},
 						},
 						{
@@ -597,7 +535,7 @@ export default {
 							type: 'Icon',
 							align: 'center',
 							Icon(value) {
-								return value ? 'check' : 'x';
+								return value ? 'check' : 'x'
 							},
 						},
 						{
@@ -606,7 +544,7 @@ export default {
 							width: 0.3,
 							type: 'Icon',
 							Icon(value) {
-								return value ? 'check' : 'x';
+								return value ? 'check' : 'x'
 							},
 						},
 						{
@@ -616,7 +554,7 @@ export default {
 							type: 'Icon',
 							align: 'center',
 							Icon(value) {
-								return value ? 'lock' : 'unlock';
+								return value ? 'lock' : 'unlock'
 							},
 						},
 						{
@@ -625,8 +563,8 @@ export default {
 							width: 1,
 							align: 'center',
 							format(value) {
-								if (!value) return 'No Expiry';
-								return date(value, 'llll');
+								if (!value) return 'No Expiry'
+								return date(value, 'llll')
 							},
 						},
 						{
@@ -635,12 +573,12 @@ export default {
 							width: 1,
 							align: 'right',
 							format(value) {
-								return date(value, 'llll');
+								return date(value, 'llll')
 							},
 						},
 					],
 					primaryAction({ documentResource: server, listResource: snapshots }) {
-						if (server?.doc?.status === 'Archived') return;
+						if (server?.doc?.status === 'Archived') return
 						return {
 							label: 'New Snapshot',
 							slots: {
@@ -651,18 +589,20 @@ export default {
 									h(
 										defineAsyncComponent(
 											() =>
-												import('../components/server/ServerNewSnapshotDialog.vue'),
+												import(
+													'../components/server/ServerNewSnapshotDialog.vue'
+												),
 										),
 										{
 											server: server.name,
 											onSnapshotCreated: () => {
-												snapshots.reload();
+												snapshots.reload()
 											},
 										},
 									),
-								);
+								)
 							},
-						};
+						}
 					},
 					rowActions({ row, documentResource: server }) {
 						return [
@@ -671,13 +611,15 @@ export default {
 								onClick() {
 									let ServerSnapshotDetailsDialog = defineAsyncComponent(
 										() =>
-											import('../components/server/ServerSnapshotDetailsDialog.vue'),
-									);
+											import(
+												'../components/server/ServerSnapshotDetailsDialog.vue'
+											),
+									)
 									renderDialog(
 										h(ServerSnapshotDetailsDialog, {
 											name: row.name,
 										}),
-									);
+									)
 								},
 							},
 							{
@@ -686,13 +628,15 @@ export default {
 								onClick() {
 									let ServerSnapshotRecoverSitesDialog = defineAsyncComponent(
 										() =>
-											import('../components/server/ServerSnapshotRecoverSitesDialog.vue'),
-									);
+											import(
+												'../components/server/ServerSnapshotRecoverSitesDialog.vue'
+											),
+									)
 									renderDialog(
 										h(ServerSnapshotRecoverSitesDialog, {
 											name: row.name,
 										}),
-									);
+									)
 								},
 							},
 							{
@@ -713,7 +657,7 @@ export default {
 														},
 														{
 															onSuccess() {
-																hide();
+																hide()
 															},
 														},
 													),
@@ -723,13 +667,13 @@ export default {
 														error: (err) => {
 															return err.messages?.length
 																? err.messages.join('\n')
-																: err.message || 'Failed to lock snapshot';
+																: err.message || 'Failed to lock snapshot'
 														},
 													},
-												);
+												)
 											},
 										},
-									});
+									})
 								},
 							},
 							{
@@ -750,7 +694,7 @@ export default {
 														},
 														{
 															onSuccess() {
-																hide();
+																hide()
 															},
 														},
 													),
@@ -760,13 +704,13 @@ export default {
 														error: (err) => {
 															return err.messages?.length
 																? err.messages.join('\n')
-																: err.message || 'Failed to unlock snapshot';
+																: err.message || 'Failed to unlock snapshot'
 														},
 													},
-												);
+												)
 											},
 										},
-									});
+									})
 								},
 							},
 							{
@@ -788,7 +732,7 @@ export default {
 														},
 														{
 															onSuccess() {
-																hide();
+																hide()
 															},
 														},
 													),
@@ -798,16 +742,16 @@ export default {
 														error: (err) => {
 															return err.messages?.length
 																? err.messages.join('\n')
-																: err.message || 'Failed to delete snapshot';
+																: err.message || 'Failed to delete snapshot'
 														},
 													},
-												);
+												)
 											},
 										},
-									});
+									})
 								},
 							},
-						];
+						]
 					},
 				},
 			},
@@ -816,7 +760,7 @@ export default {
 				label: 'Plays',
 				icon: icon('play'),
 				condition: (server) => {
-					return server.doc?.status !== 'Archived';
+					return server.doc?.status !== 'Archived'
 				},
 				childrenRoutes: ['Server Play'],
 				route: 'plays',
@@ -836,7 +780,7 @@ export default {
 									server.doc.replication_server,
 								].filter(Boolean),
 							},
-						];
+						]
 					},
 					filters: (server) => {
 						return {
@@ -848,13 +792,13 @@ export default {
 									server.doc.replication_server,
 								].filter(Boolean),
 							],
-						};
+						}
 					},
 					route(row) {
 						return {
 							name: 'Server Play',
 							params: { id: row.name },
-						};
+						}
 					},
 					orderBy: 'creation desc',
 					fields: ['server', 'end'],
@@ -880,8 +824,8 @@ export default {
 							fieldname: 'duration',
 							width: 0.5,
 							format(value, row) {
-								if (row.job_id === 0 || !row.end) return;
-								return duration(value);
+								if (row.job_id === 0 || !row.end) return
+								return duration(value)
 							},
 						},
 						{
@@ -897,13 +841,13 @@ export default {
 				label: 'Actions',
 				icon: icon('sliders'),
 				condition: (server) => {
-					return server.doc?.status !== 'Archived';
+					return server.doc?.status !== 'Archived'
 				},
 				route: 'actions',
 				type: 'Component',
 				component: ServerActions,
 				props: (server) => {
-					return { server: server.doc.name };
+					return { server: server.doc.name }
 				},
 			},
 			{
@@ -912,8 +856,8 @@ export default {
 				route: 'auto-scale',
 				type: 'Component',
 				condition: (server) => {
-					if (!server?.doc) return true;
-					return server?.doc?.secondary_server;
+					if (!server?.doc) return true
+					return server?.doc?.secondary_server
 				},
 				redirectTo: 'Triggered',
 				childrenRoutes: ['Triggered', 'Scheduled'],
@@ -937,26 +881,26 @@ export default {
 				props: (server) => {
 					return {
 						server: server.doc.name,
-					};
+					}
 				},
 			},
 			{
-				label: 'Firewall',
+				label: 'Security',
 				icon: icon('shield'),
 				condition: (server) => {
 					return (
 						server.doc?.status !== 'Archived' && !server.doc?.is_self_hosted
-					);
+					)
 				},
-				route: 'firewall',
+				route: 'security',
 				type: 'Component',
 				component: defineAsyncComponent(
-					() => import('../components/server/ServerFirewall.vue'),
+					() => import('../components/server/ServerSecurity.vue'),
 				),
 				props: (server) => {
 					return {
 						id: server.doc.name,
-					};
+					}
 				},
 			},
 			tagTab('Server'),
@@ -966,7 +910,7 @@ export default {
 				route: 'activity',
 				type: 'list',
 				condition: (server) => {
-					return server.doc?.status !== 'Archived';
+					return server.doc?.status !== 'Archived'
 				},
 				list: {
 					doctype: 'Server Activity',
@@ -976,7 +920,7 @@ export default {
 								'in',
 								[server.doc?.name, server.doc?.database_server],
 							],
-						};
+						}
 					},
 					orderBy: 'creation desc',
 					fields: ['owner'],
@@ -985,7 +929,7 @@ export default {
 							label: 'Action',
 							fieldname: 'action',
 							format(value, row) {
-								return `${row.action} by ${row.owner}`;
+								return `${row.action} by ${row.owner}`
 							},
 						},
 						{
@@ -1021,7 +965,92 @@ export default {
 									'Disk Size Change',
 								],
 							},
-						];
+						]
+					},
+				},
+			},
+
+			{
+				label: 'Plan History',
+				icon: icon('credit-card'),
+				route: 'plan-history',
+				type: 'list',
+				list: {
+					doctype: 'Plan Change',
+					filters: (server) => {
+						return {
+							document_name: [
+								'in',
+								[server.doc?.name, server.doc?.database_server].filter(Boolean),
+							],
+						}
+					},
+					fields: [
+						'from_plan',
+						'to_plan',
+						'type',
+						'timestamp',
+						'owner',
+						'document_type',
+					],
+					orderBy: 'timestamp desc',
+					columns: [
+						{
+							label: 'Server Type',
+							fieldname: 'document_type',
+							format(value) {
+								if (value === 'Server') return 'Application Server'
+								if (value === 'Database Server') return 'Database Server'
+								return value || '—'
+							},
+						},
+						{
+							label: 'Changed From',
+							fieldname: 'from_plan',
+							class: 'text-gray-600',
+							format(value) {
+								return value || '—'
+							},
+						},
+						{
+							label: 'Changed To',
+							fieldname: 'to_plan',
+						},
+						{
+							label: 'Type',
+							fieldname: 'type',
+							type: 'Badge',
+							theme(value) {
+								if (value === 'Upgrade') return 'green'
+								if (value === 'Downgrade') return 'red'
+								return 'gray'
+							},
+						},
+						{
+							label: 'Changed By',
+							fieldname: 'owner',
+							class: 'text-gray-600',
+						},
+						{
+							label: 'Date',
+							fieldname: 'timestamp',
+							type: 'Timestamp',
+							align: 'right',
+						},
+					],
+					filterControls() {
+						return [
+							{
+								type: 'select',
+								label: 'Server Type',
+								fieldname: 'document_type',
+								options: [
+									{ label: 'All', value: null },
+									{ label: 'Application Server', value: 'Server' },
+									{ label: 'Database Server', value: 'Database Server' },
+								],
+							},
+						]
 					},
 				},
 			},
@@ -1031,11 +1060,13 @@ export default {
 		{
 			name: 'Server Job',
 			path: 'jobs/:id',
+			meta: { title: 'Job' },
 			component: () => import('../pages/JobPage.vue'),
 		},
 		{
 			name: 'Server Play',
 			path: 'plays/:id',
+			meta: { title: 'Play' },
 			component: () => import('../pages/PlayPage.vue'),
 		},
 		{
@@ -1043,5 +1074,10 @@ export default {
 			path: 'auto-scale-steps/:id',
 			component: () => import('../components/server/AutoScaleSteps.vue'),
 		},
+		{
+			// Security replaced the Firewall tab, keep old links working
+			path: 'firewall',
+			redirect: (to) => ({ name: 'Server Detail Security', params: to.params }),
+		},
 	],
-};
+}

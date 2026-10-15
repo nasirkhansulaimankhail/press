@@ -19,6 +19,7 @@ from press.api.bench import (
 	deploy_information,
 	get,
 	new,
+	search_releases,
 	update_config,
 	update_dependencies,
 )
@@ -121,7 +122,9 @@ class TestAPIBench(FrappeTestCase):
 		"press.press.doctype.deploy_candidate.deploy_candidate.frappe.enqueue_doc",
 		new=foreground_enqueue_doc,
 	)
-	@patch.object(DeployCandidate, "schedule_build_and_deploy", new=MagicMock())
+	@patch.object(
+		DeployCandidate, "schedule_build_and_deploy", new=MagicMock(return_value={"name": "mock-deploy"})
+	)
 	@patch("press.press.doctype.deploy_candidate.deploy_candidate.frappe.db.commit", new=Mock())
 	def test_deploy_and_update_fn_creates_bench_update(self):
 		group = new(
@@ -186,6 +189,31 @@ class TestAPIBench(FrappeTestCase):
 				print("Waitng for container to respond", str(e))
 			time.sleep(0.5)
 
+	def test_search_releases_selects_fixed_columns_when_caller_passes_fields(self):
+		release = create_test_app_release(self.app_source)
+		frappe.db.set_value("App Release", release.name, "public", 1)
+		injected_field = "hash` FROM `tabUser` WHERE SLEEP(5)-- -"
+
+		releases = frappe.call(
+			search_releases,
+			app=self.app.name,
+			source=self.app_source.name,
+			query=release.hash[:7],
+			fields=["name", injected_field],
+		)
+
+		self.assertEqual(
+			releases,
+			[
+				{
+					"name": release.name,
+					"message": release.message,
+					"timestamp": release.timestamp,
+					"hash": release.hash,
+				}
+			],
+		)
+
 
 class TestAPIBenchConfig(FrappeTestCase):
 	def setUp(self):
@@ -225,6 +253,24 @@ class TestAPIBenchConfig(FrappeTestCase):
 			},
 		)
 		self.assertEqual(new_bench_config, {"http_timeout": 120})
+
+	def test_json_config_key_rejects_a_value_that_isnt_json(self):
+		self.assertRaisesRegex(
+			frappe.ValidationError,
+			"is not valid JSON",
+			update_config,
+			self.rg.name,
+			[{"key": "limits", "value": "{limit: val}", "type": "JSON"}],
+		)
+
+	def test_json_config_key_rejects_a_json_scalar(self):
+		self.assertRaisesRegex(
+			frappe.ValidationError,
+			"must be a JSON object or array",
+			update_config,
+			self.rg.name,
+			[{"key": "limits", "value": '"val"', "type": "JSON"}],
+		)
 
 	def test_bench_config_is_updated_in_subsequent_benches(self):
 		bench = create_test_bench(group=self.rg)
@@ -302,7 +348,7 @@ class TestAPIBenchConfig(FrappeTestCase):
 	def test_cannot_remove_dependencies(self):
 		self.assertRaisesRegex(
 			Exception,
-			"Need all required dependencies",
+			"Please provide a value for every dependency",
 			update_dependencies,
 			self.rg.name,
 			json.dumps(
@@ -318,7 +364,7 @@ class TestAPIBenchConfig(FrappeTestCase):
 	def test_cannot_add_additional_invalid_dependencies(self):
 		self.assertRaisesRegex(
 			Exception,
-			"Need all required dependencies",
+			"Please provide a value for every dependency",
 			update_dependencies,
 			self.rg.name,
 			json.dumps(

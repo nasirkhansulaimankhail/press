@@ -125,7 +125,9 @@ class AnsibleEventHandler:
 		frappe.db.commit()
 
 	@reconnect_on_failure()
-	def update_task(self, status: str, role: str | None = None, task: str | None = None, result: dict | None = None):
+	def update_task(
+		self, status: str, role: str | None = None, task: str | None = None, result: dict | None = None
+	):
 		task_name = self._get_task_name(role, task)
 		if not task_name:
 			return
@@ -231,7 +233,10 @@ class Ansible:
 		self.host = server.ip if server.ip else server.private_ip
 		self.port = port
 		self.user = user
-		self.variables = variables or {}
+		self.variables = {"cloud_provider": server.get("provider") or ""} | (variables or {})
+		self.variables["agent_customizations_committed"] = bool(
+			(frappe.conf.get("press_agent_release_refs") or {}).get(server.get("name"))
+		)
 		self.ssh_common_args = self._get_ssh_common_args(server)
 		self.bridge_python = self._get_bridge_python()
 		self.bridge_script = frappe.get_app_path("press", "scripts", "ansible_bridge.py")

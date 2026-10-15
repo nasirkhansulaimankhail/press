@@ -1,29 +1,6 @@
-import frappe
-
-
 def execute():
-	enabled_site_plans = frappe.db.get_all(
-		"Site Plan",
-		filters={"enabled": 1, "document_type": "Site"},
-		pluck="name",
-	)
+	"""Keep the local catalog's reviewed provider eligibility unchanged.
 
-	provider_names = (
-		frappe.db.get_all(
-			"Cloud Provider",
-			pluck="name",
-		)
-		or []
-	)
-
-	if not (enabled_site_plans and provider_names):
-		return
-
-	for plan_name in enabled_site_plans:
-		plan = frappe.get_doc("Site Plan", plan_name)
-		for provider in provider_names:
-			plan.append("cloud_providers", {"cloud_provider": provider})
-
-		plan.save()
-
-	frappe.db.commit()
+	An empty provider list already means unrestricted eligibility. Copying the
+	upstream provider list would restrict custom local providers on existing plans.
+	"""

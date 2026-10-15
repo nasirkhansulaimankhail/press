@@ -83,7 +83,7 @@
 							/>
 							<PhoneInput
 								v-if="!isInvitation"
-								label="Phone Number(Optional)"
+								label="Phone"
 								v-model="phoneNumber"
 								:countries="countries"
 								:country="country"
@@ -108,6 +108,10 @@
 								>Allow my details to be shared with a local partner</label
 							>
 						</div>
+						<ErrorMessage
+							class="mt-4"
+							:message="$resources.acceptInvite.error"
+						/>
 						<Button
 							class="mt-4"
 							variant="solid"

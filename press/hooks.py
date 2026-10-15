@@ -98,7 +98,6 @@ jinja = {
 
 # before_install = "press.install.before_install"
 after_install = "press.install.after_install"
-after_migrate = ["press.api.account.clear_country_list_cache", "press.sanity.checks"]
 
 # Desk Notifications
 # ------------------
@@ -123,6 +122,8 @@ permission_query_conditions = {
 	"Invoice": "press.press.doctype.invoice.invoice.get_permission_query_conditions",
 	"App Source": ("press.press.doctype.app_source.app_source.get_permission_query_conditions"),
 	"App Release": ("press.press.doctype.app_release.app_release.get_permission_query_conditions"),
+	"Marketplace App": "press.press.doctype.marketplace_app.marketplace_app.get_permission_query_conditions",
+	"Marketplace App Plan": "press.marketplace.doctype.marketplace_app_plan.marketplace_app_plan.get_permission_query_conditions",
 	"Release Group": "press.press.doctype.release_group.release_group.get_permission_query_conditions",
 	"Deploy Candidate": "press.press.doctype.deploy_candidate.deploy_candidate.get_permission_query_conditions",
 	"Deploy Candidate Difference": "press.press.doctype.deploy_candidate_difference.deploy_candidate_difference.get_permission_query_conditions",
@@ -137,8 +138,12 @@ permission_query_conditions = {
 	"Site Database User": "press.press.doctype.site_database_user.site_database_user.get_permission_query_conditions",
 	"Server Snapshot": "press.press.doctype.server_snapshot.server_snapshot.get_permission_query_conditions",
 	"Server Snapshot Recovery": "press.press.doctype.server_snapshot_recovery.server_snapshot_recovery.get_permission_query_conditions",
+	"Release Pipeline": "press.press.doctype.release_pipeline.release_pipeline.get_permission_query_conditions",
+	"Team Member Resource": "press.press.doctype.team_member_resource.team_member_resource.get_permission_query_conditions",
 }
 has_permission = {
+	"Team Member Resource": "press.press.doctype.team_member_resource.team_member_resource.has_permission",
+	"Account Request": "press.press.doctype.account_request.account_request.has_permission",
 	"Site": "press.overrides.has_permission",
 	"Site Action": "press.overrides.has_permission",
 	"Site Backup": "press.overrides.has_permission",
@@ -151,6 +156,8 @@ has_permission = {
 	"Invoice": "press.press.doctype.invoice.invoice.has_permission",
 	"App Source": "press.overrides.has_permission",
 	"App Release": "press.press.doctype.app_release.app_release.has_permission",
+	"Marketplace App": "press.overrides.has_permission",
+	"Marketplace App Plan": "press.marketplace.doctype.marketplace_app_plan.marketplace_app_plan.has_permission",
 	"Release Group": "press.overrides.has_permission",
 	"Deploy Candidate": "press.overrides.has_permission",
 	"Deploy Candidate Difference": "press.overrides.has_permission",
@@ -167,6 +174,7 @@ has_permission = {
 	"Server Snapshot Recovery": "press.overrides.has_permission",
 	"Server Firewall": "press.press.doctype.server_firewall.server_firewall.has_permission",
 	"Support Access": "press.press.doctype.support_access.support_access.has_permission",
+	"Release Pipeline": "press.overrides.has_permission",
 }
 
 # Document Events
@@ -181,6 +189,10 @@ doc_events = {
 		],
 	},
 	"Address": {"validate": "press.api.billing.validate_gst"},
+	"Country": {
+		"on_update": "press.api.account.clear_country_list_cache",
+		"on_trash": "press.api.account.clear_country_list_cache",
+	},
 	"Site": {
 		"before_insert": "press.press.doctype.team.team.validate_site_creation",
 		"after_insert": "press.press.doctype.press_role.press_role.create_user_resource",
@@ -207,19 +219,24 @@ scheduler_events = {
 	"daily": [
 		"press.experimental.doctype.referral_bonus.referral_bonus.credit_referral_bonuses",
 		"press.press.doctype.log_counter.log_counter.record_counts",
+		"press.press.doctype.site_version_audit.site_version_audit.record_audit",
 		"press.press.doctype.incident.incident.notify_ignored_servers",
 		"press.press.doctype.database_server.database_server.unindex_mariadb_binlogs",
 		"press.press.doctype.database_server.database_server.remove_uploaded_binlogs_from_disk",
 		"press.press.doctype.database_server.database_server.remove_uploaded_binlogs_from_s3",
 		"press.press.doctype.mariadb_binlog.mariadb_binlog.cleanup_old_records",
+		"press.press.doctype.mariadb_audit_log.mariadb_audit_log.delete_expired_audit_logs",
 		"press.press.doctype.database_server.database_server.delete_mariadb_binlog_for_archived_servers",
 		"press.press.doctype.team.team.check_budget_alerts",
 		"press.press.doctype.site.site.archive_creation_failed_sites",
 		"press.press.doctype.server.server.process_running_benches_on_server",
+		"press.press.doctype.server.server_monitoring.alert_on_sites_with_missing_backups",
 	],
 	"daily_long": [
+		"press.press.doctype.site_adoption_snapshot.site_adoption_snapshot.record_daily_snapshot",
 		"press.press.audit.check_bench_fields",
 		"press.press.audit.check_offsite_backups",
+		"press.press.doctype.malware_scan.malware_scan.scan_opted_in_servers",
 		"press.press.audit.plan_audit",
 		"press.press.audit.check_app_server_replica_benches",
 		"press.press.doctype.invoice.invoice.finalize_unpaid_prepaid_credit_invoices",
@@ -233,8 +250,9 @@ scheduler_events = {
 		"press.press.doctype.press_webhook_log.press_webhook_log.clean_logs_older_than_24_hours",
 		"press.press.doctype.payment_due_extension.payment_due_extension.remove_payment_due_extension",
 		"press.press.doctype.tls_certificate.tls_certificate.notify_custom_tls_renewal",
+		"press.press.doctype.tls_certificate.tls_certificate.retrigger_pending_site_domain_callbacks",
 		"press.press.doctype.site.site.suspend_sites_exceeding_disk_usage_for_last_14_days",
-		"press.press.doctype.user_2fa.user_2fa.yearly_2fa_recovery_code_reminder",
+		"press.press.doctype.user_2fa.user_2fa.send_2fa_recovery_code_reminders",
 		"press.press.doctype.registry_server.registry_server.delete_old_images_from_registry",
 		"press.saas.doctype.product_trial_request.product_trial_request.gather_daily_stats",
 		"press.press.doctype.agent_job.agent_job.agent_poll_count_stats_daily",
@@ -251,6 +269,7 @@ scheduler_events = {
 		"press.press.doctype.site.backups.schedule_physical_backups_for_sites_with_backup_time",
 		"press.press.doctype.tls_certificate.tls_certificate.renew_tls_certificates",
 		"press.saas.doctype.product_trial_request.product_trial_request.expire_long_pending_trial_requests",
+		"press.press.doctype.support_access.support_access.expire_pending_requests",
 		"press.overrides.cleanup_ansible_tmp_files",
 		"press.press.doctype.site.site.send_warning_mail_regarding_sites_exceeding_disk_usage",
 		"press.press.doctype.add_on_storage_log.add_on_storage_log.send_disk_extention_notification",
@@ -259,16 +278,23 @@ scheduler_events = {
 		"press.saas.doctype.product_trial.product_trial.sync_product_site_users",
 		"press.press.doctype.database_server.database_server.sync_binlogs_info",
 		"press.press.doctype.team.team.auto_enable_ssh_access_for_7_days_older_teams",
+		"press.press.doctype.incident_settings.incident_settings.alert_if_phone_call_alerts_disabled",
+		"press.press.doctype.server.server.install_missing_wazuh_agents",
+		"press.press.doctype.server.server.sync_wazuh_agent_status",
+		"press.press.doctype.server.server_monitoring.alert_on_failing_signups",
 		# "press.press.doctype.team.team.auto_trust_teams_with_consecutive_paid_invoices",
+		"press.press.doctype.database_server.database_server.upload_audit_logs_to_s3",
 	],
 	"hourly_long": [
+		"press.press.doctype.scheduled_deploy_settings.scheduled_deploy_settings.deploy_scheduled_release_groups",
+		"press.press.doctype.site_adoption_snapshot.site_adoption_snapshot.record_hourly_snapshot",
 		"press.press.doctype.release_group.release_group.prune_servers_without_sites",
-		"press.press.doctype.server.server.refresh_new_bench_and_site_server_pool",
+		"press.press.doctype.server.server_monitoring.monitor_server_and_refresh_new_bench_and_site_server_pool",
 		"press.press.doctype.release_group.release_group.add_public_servers_to_public_groups",
 		"press.press.doctype.server.server.scale_workers",
 		"press.press.doctype.usage_record.usage_record.link_unlinked_usage_records",
 		"press.press.doctype.bench.bench.sync_benches",
-		"press.press.doctype.invoice.invoice.finalize_draft_invoices",
+		"press.press.doctype.invoice.invoice.create_invoices_for_next_month",
 		"press.press.doctype.invoice.invoice.finalize_razorpay_mandate_invoices",
 		"press.press.doctype.agent_job.agent_job.fail_old_jobs",
 		"press.press.doctype.site_update.site_update.mark_stuck_updates_as_fatal",
@@ -277,7 +303,8 @@ scheduler_events = {
 		"press.press.doctype.virtual_machine.virtual_machine.snapshot_oci_virtual_machines",
 		"press.press.doctype.virtual_machine.virtual_machine.snapshot_hetzner_virtual_machines",
 		"press.press.doctype.virtual_machine.virtual_machine.snapshot_aws_internal_virtual_machines",
-		"press.press.doctype.virtual_machine.virtual_machine.snapshot_frappe_compute_virtual_machines",
+		# Disabled: snapshots on Frappe Compute (bare metal) fail and flood the error log
+		# "press.press.doctype.virtual_machine.virtual_machine.snapshot_frappe_compute_virtual_machines",
 		"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.delete_old_snapshots",
 		"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.delete_expired_snapshots",
 		"press.press.doctype.app_release.app_release.cleanup_unused_releases",
@@ -286,6 +313,7 @@ scheduler_events = {
 		"press.press.doctype.agent_job.agent_job.agent_poll_count_stats_hourly",
 		"press.press.doctype.database_server.database_server.database_flush_tables_of_public_servers",
 		"press.press.doctype.server_snapshot.server_snapshot.delete_dedicated_snapshots_with_failure_status",
+		"press.saas.doctype.product_trial.product_trial.archive_standby_sites_of_disabled_pooling_products",
 	],
 	"all": [
 		"press.auth.flush",
@@ -325,7 +353,6 @@ scheduler_events = {
 			"press.press.doctype.bench.bench.process_bench_queue",
 		],
 		"* * * * * 0/30": [
-			"press.press.doctype.account_request.account_request.expire_request_key",
 			"press.press.doctype.physical_backup_restoration.physical_backup_restoration.process_scheduled_restorations",
 			"press.press.doctype.site_action.site_action.process_site_actions",
 		],
@@ -335,6 +362,7 @@ scheduler_events = {
 		"0 */6 * * *": [
 			"press.press.doctype.server.server.cleanup_unused_files",
 			"press.press.doctype.razorpay_payment_record.razorpay_payment_record.fetch_pending_payment_orders",
+			"press.press.doctype.server.server.archive_servers_with_unpaid_invoices",
 		],
 		"*/15 * * * *": [
 			"press.press.doctype.site_update.site_update.schedule_updates",
@@ -350,6 +378,7 @@ scheduler_events = {
 			"press.press.doctype.site.site.archive_suspended_sites",
 		],
 		"*/5 * * * *": [
+			"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.enqueue_delete_orphaned_dedicated_snapshots",
 			"press.press.doctype.version_upgrade.version_upgrade.update_from_site_update",
 			"press.press.doctype.site_replication.site_replication.update_from_site",
 			"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.sync_snapshots",
@@ -381,6 +410,7 @@ scheduler_events = {
 			"press.press.doctype.server_plan.server_plan.sync_machine_availability_status_of_plans",
 		],
 		"*/30 * * * *": [
+			"press.press.doctype.account_request.account_request.expire_request_key",
 			"press.press.doctype.site_update.scheduled_auto_updates.trigger",
 			"press.press.doctype.team.suspend_sites.execute",
 			"press.press.doctype.site_backup.site_backup.delete_successful_unavailable_backups_for_archived_sites",
@@ -413,6 +443,9 @@ scheduler_events = {
 			"press.press.doctype.build_metric.build_metric.create_build_metric",
 			"press.saas.doctype.product_trial_request.product_trial_request.gather_weekly_stats",
 		],
+		"*/30 * 1 * *": [
+			"press.press.doctype.invoice.invoice.finalize_monthly_draft_invoices",
+		],
 	},
 }
 
@@ -430,7 +463,10 @@ fixtures = [
 	"Bench Dependency",
 	"Server Storage Plan",
 	"Server Snapshot Plan",
+	"S3 Storage Plan",
 	"Press Webhook Event",
+	"Server Plan",
+	"Team Tier",
 ]
 # Testing
 # -------
@@ -451,7 +487,6 @@ override_whitelisted_methods = {"upload_file": "press.overrides.upload_file"}
 
 override_doctype_class = {"User": "press.overrides.CustomUser"}
 
-on_session_creation = "press.overrides.on_session_creation"
 # on_logout = "press.overrides.on_logout"
 on_login = "press.overrides.on_login"
 
@@ -490,6 +525,9 @@ __persistent_cache_keys = [
 	"one_time_login_key*",
 	"press-auth-logs",
 	"rl:*",
+	"press_otp:*",
+	"press_otp_sent:*",
+	"v1_migration_request||*",
 ]
 
 # `frappe.rename_doc` erases all caches, this hook preserves some of them.
@@ -537,4 +575,8 @@ persistent_cache_keys = [
 ]
 
 before_migrate = ["press.overrides.before_after_migrate"]
-after_migrate = ["press.overrides.before_after_migrate"]
+after_migrate = [
+	"press.overrides.before_after_migrate",
+	"press.api.account.clear_country_list_cache",
+	"press.sanity.checks",
+]

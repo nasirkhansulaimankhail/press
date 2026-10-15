@@ -16,9 +16,11 @@ from press.api.marketplace import (
 	branches,
 	change_app_plan,
 	change_branch,
+	convert_to_webp,
 	create_app_plan,
 	create_approval_request,
 	get_app,
+	get_app_audits,
 	get_apps,
 	get_apps_with_plans,
 	get_latest_approval_request,
@@ -205,8 +207,9 @@ class TestAPIMarketplace(FrappeTestCase):
 		self.assertIsNotNone(get_marketplace_subscriptions_for_site(site.name))
 
 	def test_change_app_plan(self):
-		subscription = create_test_marketplace_app_subscription()
-		new_plan = create_test_marketplace_app_plan()
+		subscription = create_test_marketplace_app_subscription(app="frappe")
+		new_plan = create_test_marketplace_app_plan(price_usd=0)
+		frappe.set_user(frappe.db.get_value("Team", subscription.team, "user"))
 		change_app_plan(subscription.name, new_plan.name)
 
 		self.assertEqual(
@@ -214,13 +217,36 @@ class TestAPIMarketplace(FrappeTestCase):
 			frappe.db.get_value("Subscription", subscription.name, "plan"),
 		)
 
+	def test_change_app_plan_blocked_for_other_team(self):
+		subscription = create_test_marketplace_app_subscription(app="frappe")
+		new_plan = create_test_marketplace_app_plan(price_usd=0)
+		frappe.set_user(create_test_press_admin_team().user)
+
+		with self.assertRaises(frappe.PermissionError):
+			change_app_plan(subscription.name, new_plan.name)
+
+		self.assertEqual(
+			subscription.plan,
+			frappe.db.get_value("Subscription", subscription.name, "plan"),
+		)
+
+	def test_change_app_plan_rejects_plan_of_another_app(self):
+		subscription = create_test_marketplace_app_subscription(app="frappe")
+		other_app = create_test_app(frappe.mock("name"), frappe.mock("name"))
+		other_plan = create_test_marketplace_app_plan(other_app.name, price_usd=0)
+		frappe.set_user(frappe.db.get_value("Team", subscription.team, "user"))
+
+		with self.assertRaises(frappe.ValidationError):
+			change_app_plan(subscription.name, other_plan.name)
+
 	def test_get_subscription_list(self):
 		self.assertEqual([], get_subscriptions_list("frappe"))
 		create_test_marketplace_app_subscription(app="frappe")
 		self.assertIsNotNone(get_subscriptions_list("frappe"))
 
 	def test_update_app_plan(self):
-		m_plan = create_test_marketplace_app_plan()
+		frappe.set_user(self.team.user)
+		m_plan = create_test_marketplace_app_plan(self.marketplace_app.name)
 
 		updated_plan_data = {
 			"price_inr": m_plan.price_inr + 100,
@@ -258,11 +284,40 @@ class TestAPIMarketplace(FrappeTestCase):
 		r = releases({"app": self.marketplace_app.name, "source": self.app_source.name})
 		self.assertEqual(r[0].name, self.app_release.name)
 
+	def test_get_app_audits_returns_audit_summaries_for_app(self):
+		audit = frappe.get_doc(
+			{
+				"doctype": "Marketplace App Audit",
+				"marketplace_app": self.marketplace_app.name,
+				"app_source": self.app_source.name,
+				"app_release": self.app_release.name,
+				"team": self.team.name,
+				"audit_type": "Manual Run",
+				"status": "Completed",
+				"audit_result": "Needs Improvement",
+			}
+		).insert()
+
+		frappe.set_user(self.team.user)
+		audits = get_app_audits(self.marketplace_app.name)
+
+		self.assertEqual(len(audits), 1)
+		self.assertEqual(audits[0].name, audit.name)
+		self.assertEqual(audits[0].app_source, self.app_source.name)
+		self.assertEqual(audits[0].app_release, self.app_release.name)
+		self.assertEqual(audits[0].audit_type, "Manual Run")
+		self.assertEqual(audits[0].audit_result, "Needs Improvement")
+		self.assertEqual(audits[0].status, "Completed")
+
 	def test_app_release_approvals(self):
 		frappe.set_user(self.team.user)
-		create_approval_request(self.marketplace_app.name, self.app_release.name)
+		with patch(
+			"press.press.doctype.app_release_approval_request.app_release_approval_request.MarketplaceAppAudit.create_for_release"
+		) as create_audit:
+			create_approval_request(self.marketplace_app.name, self.app_release.name)
 		latest_approval = get_latest_approval_request(self.app_release.name)
 		self.assertIsNotNone(latest_approval)
+		create_audit.assert_called_once()
 
 	def test_new_app(self):
 		app = {
@@ -452,6 +507,24 @@ class TestAPIMarketplace(FrappeTestCase):
 
 		self.marketplace_app.reload()
 		self.assertEqual(len(self.marketplace_app.screenshots), 0)
+
+	def test_convert_to_webp_composites_transparent_pixels_onto_white(self):
+		"""Straight-alpha PNGs keep RGB in transparent pixels. Dropping alpha leaked those colors into listing logos."""
+		from io import BytesIO
+
+		from PIL import Image
+
+		image = Image.new("RGBA", (300, 300), (0, 132, 232, 0))
+		opaque = Image.new("RGBA", (100, 100), (68, 175, 106, 255))
+		image.paste(opaque, (100, 100), opaque)
+		buf = BytesIO()
+		image.save(buf, format="PNG")
+
+		result = Image.open(BytesIO(convert_to_webp(buf.getvalue()))).convert("RGB")
+		self.assertTrue(all(channel > 250 for channel in result.getpixel((0, 0))))
+		r, g, b = result.getpixel((150, 150))
+		self.assertGreater(g, r)
+		self.assertGreater(g, b)
 
 
 def _make_test_image(size=300):

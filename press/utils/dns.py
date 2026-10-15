@@ -39,9 +39,7 @@ def create_dns_record(doc, record_name=None):
 	if frappe.flags.in_test:
 		return
 
-	server = frappe.get_value(
-		"Server", doc.server, ["proxy_server", "is_standalone"], as_dict=True
-	)
+	server = frappe.get_value("Server", doc.server, ["proxy_server", "is_standalone"], as_dict=True)
 	dns_target = doc.server if server.is_standalone else server.proxy_server
 
 	# The root-domain wildcard only covers sites routed through its primary proxy.
@@ -94,20 +92,17 @@ def _change_dns_record(method: str, domain: RootDomain, proxy_server: str, recor
 	try:
 		zones = client.list_hosted_zones_by_name()["HostedZones"]
 		hosted_zone = find(reversed(zones), lambda x: domain.name.endswith(x["Name"][:-1]))["Id"]
+		record = {
+			"Name": record_name,
+			"Type": "CNAME",
+			"TTL": 600,
+			"ResourceRecords": [{"Value": proxy_server}],
+		}
+		if method == "DELETE" and record_name:
+			# Route 53 deletes only on an exact match, and older records have other TTLs
+			record = _find_cname_record(client, hosted_zone, record_name, proxy_server) or record
 		client.change_resource_record_sets(
-			ChangeBatch={
-				"Changes": [
-					{
-						"Action": method,
-						"ResourceRecordSet": {
-							"Name": record_name,
-							"Type": "CNAME",
-							"TTL": 600,
-							"ResourceRecords": [{"Value": proxy_server}],
-						},
-					}
-				]
-			},
+			ChangeBatch={"Changes": [{"Action": method, "ResourceRecordSet": record}]},
 			HostedZoneId=hosted_zone,
 		)
 	except client.exceptions.InvalidChangeBatch as e:
@@ -129,6 +124,24 @@ def _change_dns_record(method: str, domain: RootDomain, proxy_server: str, recor
 			site=record_name,
 			proxy_server=proxy_server,
 		)
+
+
+def _find_cname_record(client, hosted_zone: str, record_name: str, target: str) -> dict | None:
+	"""Return the CNAME record set for `record_name` as Route 53 has it, if it points at `target`."""
+	records = client.list_resource_record_sets(
+		HostedZoneId=hosted_zone, StartRecordName=record_name, StartRecordType="CNAME", MaxItems="1"
+	)["ResourceRecordSets"]
+	if not records:
+		return None
+	record = records[0]
+	values = [value["Value"].rstrip(".") for value in record.get("ResourceRecords", [])]
+	if (
+		record["Name"].rstrip(".") == record_name.rstrip(".")
+		and record["Type"] == "CNAME"
+		and values == [target.rstrip(".")]
+	):
+		return record
+	return None
 
 
 def get_dns_provider_mname_rname(domain):
@@ -249,8 +262,7 @@ def check_for_ip_match(site_name: str, site_ip: str | None, domain_ip: str | Non
 			{"status": "Active", "cluster": cluster, "is_primary": True, "exclude_from_auto_selection": True},
 			pluck="ip",
 		)
-		if (domain_ip in secondary_ips) or (site_ip == proxy_ip and domain_ip in failed_over_ips):
-			return True
+		return domain_ip in [*secondary_ips, proxy_ip, *failed_over_ips]
 	return False
 
 

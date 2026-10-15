@@ -16,6 +16,7 @@
     owner: root
     group: root
     mode: '0644'
+  when: not (agent_customizations_committed | default(false) | bool)
 
 - name: Apply S3-compatible backup endpoint patch
   ansible.posix.patch:
@@ -23,6 +24,7 @@
     remote_src: yes
     basedir: /home/frappe/agent/repo
     strip: 1
+  when: not (agent_customizations_committed | default(false) | bool)
 
 - name: Copy Code Server runtime and autostart patch
   copy:
@@ -31,6 +33,7 @@
     owner: root
     group: root
     mode: '0644'
+  when: not (agent_customizations_committed | default(false) | bool)
 
 - name: Apply Code Server runtime and autostart patch
   ansible.posix.patch:
@@ -38,6 +41,7 @@
     remote_src: yes
     basedir: /home/frappe/agent/repo
     strip: 1
+  when: not (agent_customizations_committed | default(false) | bool)
 
 - name: Install Agent
   become: yes

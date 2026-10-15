@@ -10,7 +10,7 @@ from frappe.model.document import Document
 from press.overrides import has_permission as has_press_permission
 from press.press.doctype.server.server import Server
 from press.runner import Ansible
-from press.utils import get_current_team, log_error
+from press.utils import log_error
 
 
 class ServerFirewall(Document):
@@ -36,15 +36,12 @@ class ServerFirewall(Document):
 		"rules",
 	)
 
-	@staticmethod
-	def get_list_query(query):
-		"""Filter list query to only show firewalls belonging to the current team."""
-		Server = frappe.qb.DocType("Server")
-		Firewall = frappe.qb.DocType("Server Firewall")
-		current_team = get_current_team()
-		return (
-			query.inner_join(Server).on(Server.name == Firewall.server_id).where(Server.team == current_team)
-		)
+	# The firewall page is an editor: it flips the switch and rewrites the rules
+	# table, then saves both through `set_value`.
+	dashboard_editable_fields = (
+		"enabled",
+		"rules",
+	)
 
 	def before_validate(self):
 		self.deduplicate_rules()
@@ -80,6 +77,8 @@ class ServerFirewall(Document):
 			self.validate_port(rule.port)
 
 	def on_update(self):
+		if self.get_doc_before_save() is None:
+			return
 		self.sync()
 
 	@frappe.whitelist()
@@ -121,10 +120,13 @@ class ServerFirewall(Document):
 
 	def _sync_nginx(self):
 		"""Update Nginx access rules with allowed and denied IPs."""
+		server = self.server
 		ip_accept = self.get_allowed_ips_for_nginx()
 		ip_drop = [rule.source for rule in self.rules if rule.action == "Deny" and rule.source]
 		try:
-			return self.server.agent.update_nginx_access(ip_accept, ip_drop)
+			# The proxy IP travels with the rules: nginx needs it to read the
+			# visitor's address off X-Real-IP instead of matching the proxy.
+			return server.agent.update_nginx_access(ip_accept, ip_drop, server.get_proxy_ip())
 		except Exception:
 			log_error("Failed to sync nginx access rules", doc=self)
 

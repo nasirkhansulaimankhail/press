@@ -24,15 +24,15 @@
 </template>
 
 <script setup>
-import Header from '../components/Header.vue';
-import { Breadcrumbs } from 'frappe-ui';
-import { icon } from '../utils/components';
-import TabsWithRouter from '../components/TabsWithRouter.vue';
-import { getTeam } from '../data/team';
-import { session } from '../data/session';
+import { Breadcrumbs } from 'frappe-ui'
+import Header from '../components/Header.vue'
+import TabsWithRouter from '../components/TabsWithRouter.vue'
+import { session } from '../data/session'
+import { getTeam } from '../data/team'
+import { icon } from '../utils/components'
 
-let $team = getTeam();
-let $session = session || {};
+let $team = getTeam()
+let $session = session || {}
 
 const tabs = [
 	{
@@ -80,5 +80,5 @@ const tabs = [
 			'PartnerAdminResources',
 		],
 	},
-];
+]
 </script>

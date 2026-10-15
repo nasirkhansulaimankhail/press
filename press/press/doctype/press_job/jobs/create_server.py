@@ -45,6 +45,15 @@ class CreateServerJob(PressJob):
 			self.configure_mariadb_replica()
 			self.start_mariadb_replica()
 
+		# Before set_additional_config, because it reboots the server and
+		# set_additional_config only enqueues its plays (filebeat, cadvisor,
+		# wazuh, ...) - they'd still be running when the reboot lands
+		self.set_docker_mtu_hetzner()
+
+		# Before set_additional_config, so provisioning waits for rclone instead of
+		# racing the apt plays that step enqueues
+		self.enable_backup_streaming()
+
 		self.set_additional_config()
 
 		if self.is_fs_server:
@@ -238,6 +247,15 @@ class CreateServerJob(PressJob):
 		elif server.doctype == "Database Server":
 			server.set_mariadb_mount_dependency(now=True)
 
+	@task(queue="long", timeout=1200)
+	def set_docker_mtu_hetzner(self):
+		# The image ships docker on MTU 1500, which breaks traffic over Hetzner's 1450 private network
+		server = self.server_doc
+		if server.provider != "Hetzner" or server.doctype != "Server":
+			return
+
+		server._set_docker_mtu(throw_on_failure=True)
+
 	@task
 	def update_tls_certificate(self):
 		self.server_doc.update_tls_certificate(throw_on_failure=True)
@@ -279,6 +297,13 @@ class CreateServerJob(PressJob):
 			return
 
 		self.server_doc.start_replication()
+
+	@task(queue="long", timeout=1200)
+	def enable_backup_streaming(self):
+		if self.server_type != "Server":
+			return
+
+		self.server_doc.enable_backup_streaming()
 
 	@task
 	def set_additional_config(self):

@@ -115,6 +115,7 @@ class SiteGroupDeploy(Document):
 			team=self.team,
 			cluster=self.cluster,
 			server=self.server or None,
+			check_dependent_apps=True,
 		)
 
 		self.release_group = group.name

@@ -11,6 +11,7 @@ import { initSocket } from './socket';
 import { subscribeToJobUpdates } from './utils/agentJob';
 import { fetchPlans } from './data/plans.js';
 import * as Sentry from '@sentry/vue';
+import { createPinia } from 'pinia';
 import { session } from './data/session.js';
 import {
 	unreadNotificationsCount,
@@ -18,6 +19,11 @@ import {
 } from './data/notifications.js';
 import registerGlobalComponents from './components/global/register';
 import './vendor/posthog.js';
+import { pulse } from './telemetry/pulse.js';
+
+// Temporarily kills browser-side Sentry (init, tracing, replay, envelopes).
+// Flip back to false to re-enable.
+const DISABLE_SENTRY = true;
 
 const request = (options) => {
 	const _options = options || {};
@@ -38,10 +44,13 @@ setConfig('defaultDocUpdateUrl', 'press.api.client.set_value');
 setConfig('defaultDocDeleteUrl', 'press.api.client.delete');
 
 let app;
+let pinia;
 let socket;
 
 getInitialData().then(() => {
+	pinia = createPinia();
 	app = createApp(App);
+	app.use(pinia);
 	app.use(router);
 	app.use(resourcesPlugin);
 	app.use(pageMetaPlugin);
@@ -52,6 +61,10 @@ getInitialData().then(() => {
 	app.config.globalProperties.$socket = socket;
 	window.$socket = socket;
 	subscribeToJobUpdates(socket);
+
+	// Pulse analytics — config served in dashboard boot
+	pulse.init(window.pulse_telemetry);
+	app.config.globalProperties.$pulse = pulse;
 	if (session.isLoggedIn) {
 		fetchPlans();
 		session.userPermissions.fetch();
@@ -59,7 +72,10 @@ getInitialData().then(() => {
 		unreadSupportNotificationsCount.fetch();
 	}
 
-	if (window.press_dashboard_sentry_dsn.includes('https://')) {
+	if (
+		!DISABLE_SENTRY &&
+		window.press_dashboard_sentry_dsn.includes('https://')
+	) {
 		Sentry.init({
 			app,
 			dsn: window.press_dashboard_sentry_dsn,
@@ -161,7 +177,7 @@ getInitialData().then(() => {
 	}
 
 	importGlobals().then(() => {
-		app.mount('#app');
+		router.isReady().then(() => app.mount('#app'));
 	});
 
 	if (workingHours()) {
@@ -226,11 +242,11 @@ function addChatBubble() {
 
 window.addEventListener('chatwoot:ready', function () {
 	const pathname = window.location.pathname;
-	const user_email = window.user_details.email || 'Guest';
+	const user_email = window.user.email || 'Guest';
 
 	if (window.$chatwoot) {
 		window.$chatwoot.setUser(user_email, {
-			name: window.user_details.name,
+			name: window.user.name,
 			email: user_email,
 		});
 		window.$chatwoot.setCustomAttributes({

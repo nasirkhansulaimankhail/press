@@ -3,36 +3,38 @@ import {
   Badge,
   Button,
   createListResource,
-  frappeRequest,
-  Popover,
   Tabs,
   Tooltip,
+  Popover,
 } from "frappe-ui";
 
-import { h, nextTick, ref, watch } from "vue";
+import Item from "./Item.vue";
+
+import { h, nextTick, ref, watch} from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
+import { isMobile } from "@/utils/device";
+import { sanitizeHtml } from "@/utils/format";
+
 import Scrollbar from "@/components/common/Scrollbar.vue";
 import SupportAccessDialog from "@/components/SupportAccessDialog.vue";
 
 import {
+  markAllNotificationsAsRead,
   unreadNotificationsCount,
   unreadSupportNotificationsCount,
 } from "@/data/notifications";
 
+import { useRealtimeNotifs } from './useRealtimeNotifs'
+
 import { dayjsLocal } from "@/utils/dayjs";
 import { getDocResource } from "@/utils/resource";
 import { renderDialog } from "@/utils/components";
-import { isMobile } from "@/utils/device";
-
-import Item from "./Item.vue";
-
-const formatHtml = (str: string) => {
-  return str.replace(/<(?!\/?b\b)[^>]*>/g, "").split("\n")[0];
-};
+import { getTeam } from "@/data/team";
 
 const scrollRef = ref(null);
 const router = useRouter();
+const team = getTeam();
 
 const loadMore = async () => {
   await resource.next();
@@ -86,7 +88,7 @@ const markAsRead = (row, togglePopover) => {
     }
 
     if (row.route && row.type !== "Support Access") {
-      togglePopover();
+    togglePopover()
       router.push("/" + row.route);
     }
   });
@@ -94,13 +96,11 @@ const markAsRead = (row, togglePopover) => {
 
 const markAllAsRead = (togglePopover) => {
   toast.promise(
-    frappeRequest({
-      url: "/api/method/press.api.notifications.mark_all_notifications_as_read",
-    }),
+    markAllNotificationsAsRead.submit(),
     {
       success: () => {
         resource.reload();
-        togglePopover();
+        togglePopover()
 
         return "All notifications marked as read";
       },
@@ -169,6 +169,25 @@ const iconCss = {
   },
 };
 
+const classCss = {
+  Error: {
+    txt: "text-ink-red-4",
+    bg: "bg-surface-red-1",
+  },
+  Warning: {
+    txt: "text-ink-amber-3",
+    bg: "bg-surface-amber-1",
+  },
+};
+
+const tileCss = (notification) => ({
+  icon: LucideCircleAlert,
+  txt: "text-ink-gray-6",
+  bg: "bg-surface-gray-1",
+  ...iconCss[notification.type],
+  ...classCss[notification.class],
+});
+
 // Reload resource on tab switch
 const activeTab = ref(0);
 
@@ -192,13 +211,23 @@ const tabs = [
   { label: "Requests", icon: LucideKeySquare },
   { label: "Unread", icon: LucideMessageSquareDot },
 ];
+  
+const stopIfLink = (event) => {
+  if (event.target.closest("a")) event.stopPropagation();
+};
+
+useRealtimeNotifs((data) => {
+	if (data.team === team.doc.name) resource.reload()
+})
 </script>
 
 <template>
-  <Popover :placement="isMobile() ? 'top-start' : 'right-start'" popover-class="-mt-[15%] md:-mt-2.5">
+    <Popover :placement="isMobile() ? 'top-start' : 'right-start'" popover-class="-mt-[15%] md:-mt-2.5">
     <!-- sidebar item -->
     <template #target="{ togglePopover }">
-      <Item is='BUTTON' v-bind='$attrs' aria-label="Notifications btn" name='Notifications' @click="togglePopover">
+      <Item is='BUTTON' v-bind='$attrs' aria-label="Notifications btn" name='Notifications' @click="togglePopover" 
+      				:suffix="unreadNotificationsCount.data > 99 ? '99+': unreadNotificationsCount.data"
+            >
         <template #prefix>
 
           <span class="flex relative">
@@ -207,20 +236,9 @@ const tabs = [
               class="size-1 bg-surface-blue-3 rounded-full absolute right-0 -top-0.5" />
           </span>
         </template>
-
-        <template #suffix>
-          <span class="text-xs text-ink-gray-6" v-if="unreadNotificationsCount.data > 0">
-            {{
-              unreadNotificationsCount.data > 99
-                ? '99+'
-                : unreadNotificationsCount.data
-            }}
-          </span>
-        </template>
       </Item>
     </template>
 
-    <!-- floating drawer  -->
     <template #body="{ togglePopover }">
       <div
         class="text-ink-gray-9 bg-surface-white h-screen -ml-2.5 w-screen md:ml-2 shadow-xl md:w-[430px] flex flex-col dark:border-x">
@@ -255,25 +273,23 @@ const tabs = [
         </Tabs>
 
         <!-- body -->
-        <Scrollbar ref="scrollRef" v-if="resource.data.length > 0" class='max-h-[67%] md:max-h-full'>
-
+        <Scrollbar ref="scrollRef" v-if="resource?.data?.length > 0" class='max-h-[67%] md:max-h-full'>
           <!-- notif tiles = icon + info -->
           <div v-for="x in resource.data"
-            class="[&_b]:font-semibold p-2 md:p-4 flex gap-4 items-center relative cursor-pointer border-b last:border-0 hover:bg-surface-gray-1"
+            class="[&_b]:font-semibold [&_a]:underline p-2 md:p-4 flex gap-4 items-center relative cursor-pointer border-b last:border-0 hover:bg-surface-gray-1"
             @click="markAsRead(x, togglePopover)" title="Click to mark as read">
             <!-- type icon -->
             <div class="size-8 flex-shrink-0 flex items-center p-2 rounded mb-auto mt-1 relative
-              dark:bg-surface-gray-1" :class="[iconCss[x.type].bg || 'bg-surface-gray-1']">
+              dark:bg-surface-gray-1" :class="tileCss(x).bg">
               <span v-if="x.read == 0"
                 class="p-0.5 ring-outline-gray-2 ring-2 bg-surface-gray-7 absolute rounded top-0 left-0" />
-              <component :is="iconCss[x.type].icon || LucideCircleAlert" class="size-4"
-                :class="iconCss[x.type].txt || 'text-ink-gray-6'" />
+              <component :is="tileCss(x).icon" class="size-4" :class="tileCss(x).txt" />
             </div>
 
 
             <!-- info -->
             <div class="text-base leading-relaxed flex flex-wrap gap-2 w-full min-w-0">
-              <p v-html="formatHtml(x.message)" class="w-full" />
+              <p v-html="sanitizeHtml(x.message)" class="w-full [overflow-wrap:anywhere]" @click="stopIfLink" />
 
               <Badge class="text-xs mr-auto">
                 {{ x.title }}
@@ -284,9 +300,11 @@ const tabs = [
                 </Tooltip>
               </Badge>
 
-              <span class="text-ink-gray-5 text-xs">
-                {{ dayjsLocal(x.creation).fromNow() }}
-              </span>
+              <Tooltip :text="dayjsLocal(x.creation).format('LLLL')">
+                <span class="text-ink-gray-5 text-xs">
+                  {{ dayjsLocal(x.creation).fromNow() }}
+                </span>
+              </Tooltip>
             </div>
           </div>
         </Scrollbar>
@@ -297,6 +315,6 @@ const tabs = [
 
         <Button @click="loadMore" v-if="resource.hasNextPage" label="Load More" size="sm" class="ml-auto my-3 mr-3" />
       </div>
-    </template>
-  </Popover>
-</template>
+      </template>
+   </Popover>
+ </template>

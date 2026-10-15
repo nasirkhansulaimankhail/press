@@ -73,6 +73,7 @@ class SiteMigration(Document):
 		scheduled_time: DF.Datetime | None
 		site: DF.Link
 		skip_failing_patches: DF.Check
+		skip_migrate: DF.Check
 		source_bench: DF.Link
 		source_cluster: DF.Link
 		source_server: DF.Link
@@ -86,6 +87,10 @@ class SiteMigration(Document):
 		site: Site = frappe.get_doc("Site", self.site)
 		site.check_move_scheduled()
 		site.check_fatal_site_update()
+
+	def validate(self):
+		if self.skip_migrate:
+			self.skip_failing_patches = 1
 
 	def check_for_existing_domains(self):
 		"""
@@ -108,7 +113,9 @@ class SiteMigration(Document):
 
 	def validate_bench(self):
 		if frappe.db.get_value("Bench", self.destination_bench, "status", for_update=True) != "Active":
-			frappe.throw("Destination bench does not exist")
+			frappe.throw(
+				"The destination bench isn't active, so the site can't be moved to it. Please choose an active bench and try again."
+			)
 
 	@cached_property
 	def last_backup(self) -> SiteBackup | None:
@@ -623,6 +630,8 @@ class SiteMigration(Document):
 				"step_title": self.remove_site_from_source_proxy.__doc__,
 				"method_name": self.remove_site_from_source_proxy.__name__,
 				"status": "Pending",
+				"condition": frappe.db.get_value("Server", self.source_server, "proxy_server")
+				!= frappe.db.get_value("Server", self.destination_server, "proxy_server"),
 			},
 			{
 				"step_title": self.restore_site_on_destination_proxy.__doc__,
@@ -646,7 +655,9 @@ class SiteMigration(Document):
 			},
 		]
 		for step in steps:
-			self.append("steps", step)
+			if step.get("condition", None) is None or step["condition"]:
+				step.pop("condition", None)
+				self.append("steps", step)
 
 	def deactivate_site_on_source_server(self):
 		"""Deactivate site on source"""
@@ -696,7 +707,9 @@ class SiteMigration(Document):
 				site.remove_dns_record(source_proxy)
 		elif self.is_standalone_migration:
 			site.create_dns_record()
-		return agent.new_site_from_backup(site, skip_failing_patches=self.skip_failing_patches)
+		return agent.new_site_from_backup(
+			site, skip_failing_patches=self.skip_failing_patches, skip_migrate=self.skip_migrate
+		)
 
 	def restore_site_on_destination_proxy(self):
 		"""Restore site on destination proxy"""

@@ -25,6 +25,7 @@ export default defineConfig({
 		vueJsx(),
 		pluginRewriteAll(),
 		sentryVitePlugin({
+			telemetry: false,
 			url: process.env.SENTRY_URL,
 			org: process.env.SENTRY_ORG,
 			project: process.env.SENTRY_PROJECT,
@@ -39,6 +40,9 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			'@': path.resolve(__dirname, 'src'),
+			...(process.env.PRESS_BUILD_SOCKET_CONFIG
+				? { '../../../../sites/common_site_config.json': path.resolve(process.env.PRESS_BUILD_SOCKET_CONFIG) }
+				: {}),
 		},
 	},
 	optimizeDeps: {
