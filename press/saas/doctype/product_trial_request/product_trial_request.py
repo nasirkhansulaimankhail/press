@@ -12,7 +12,7 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils.caching import redis_cache
 from frappe.utils.data import add_to_date, now_datetime
-from frappe.utils.telemetry import init_telemetry
+from press.utils.telemetry import init_telemetry
 
 from press.api.client import dashboard_whitelist
 from press.press.doctype.root_domain.root_domain import get_domains
