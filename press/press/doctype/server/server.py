@@ -1072,10 +1072,8 @@ class BaseServer(Document, TagHelpers):
 	def _update_agent_ansible(self, throw_on_failure: bool = False):
 		self.validate_agent_update_allowed()
 		try:
-			agent_branch = frappe.get_value("Press Settings", "Press Settings", "branch")
-			if not agent_branch:
-				agent_branch = "upstream/master"
-			else:
+			agent_branch = self.get_agent_repository_branch()
+			if not (frappe.conf.get("press_agent_release_refs") or {}).get(self.name):
 				agent_branch = f"upstream/{agent_branch}"
 			ansible = Ansible(
 				playbook="update_agent.yml",
