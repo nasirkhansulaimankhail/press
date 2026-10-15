@@ -26,7 +26,6 @@ from frappe.installer import subprocess
 from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
 from frappe.utils.synchronization import filelock
-from frappe.utils.user import is_system_user
 
 from press.agent import Agent
 from press.api.account import is_limits_exceeded
@@ -55,6 +54,7 @@ from press.runner import Ansible
 from press.utils import docs, fmt_timedelta, log_error
 from press.utils.raven import send_raven_message
 from press.utils.user import is_desk_user
+from press.utils.user import is_system_manager as is_system_user
 from press.wazuh import WazuhManager
 
 if typing.TYPE_CHECKING:

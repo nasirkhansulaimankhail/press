@@ -28,6 +28,7 @@ from press.utils.billing import (
 )
 from press.utils.jobs import has_job_timeout_exceeded
 from press.utils.telemetry import capture_pulse
+from press.utils.user import is_system_manager as is_press_operator
 
 if typing.TYPE_CHECKING:
 	from press.press.doctype.usage_record.usage_record import UsageRecord
@@ -1694,13 +1695,14 @@ def get_permission_query_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	user_type = frappe.db.get_value("User", user, "user_type", cache=True)
-	if user_type == "System User":
+	if is_press_operator(user):
 		return ""
 
 	team = get_current_team()
 
-	return f"(`tabInvoice`.`team` = {frappe.db.escape(team)})"
+	from press.access.resource_permissions import scope_condition
+
+	return scope_condition("Invoice", team)
 
 
 def has_permission(doc, ptype, user):
@@ -1709,12 +1711,13 @@ def has_permission(doc, ptype, user):
 	if not user:
 		user = frappe.session.user
 
-	user_type = frappe.db.get_value("User", user, "user_type", cache=True)
-	if user_type == "System User":
+	if is_press_operator(user):
 		return True
 
-	if ptype == "create":
-		return True
+	from press.access.resource_permissions import permits_document
+
+	if user != frappe.session.user or not permits_document(doc, ptype):
+		return False
 
 	team = get_current_team(True)
 	team_members = [

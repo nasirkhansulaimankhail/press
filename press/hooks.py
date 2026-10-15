@@ -142,6 +142,7 @@ permission_query_conditions = {
 	"Team Member Resource": "press.press.doctype.team_member_resource.team_member_resource.get_permission_query_conditions",
 }
 has_permission = {
+	"Press Role": "press.press.doctype.press_role.press_role.has_permission",
 	"Team Member Resource": "press.press.doctype.team_member_resource.team_member_resource.has_permission",
 	"Account Request": "press.press.doctype.account_request.account_request.has_permission",
 	"Site": "press.overrides.has_permission",

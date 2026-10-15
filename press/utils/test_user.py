@@ -47,13 +47,13 @@ class TestUserUtils(FrappeTestCase):
 		frappe.set_user(email)
 		self.assertTrue(is_desk_user())
 
-	def test_is_system_manager_returns_true_for_system_user(self):
+	def test_is_system_manager_returns_false_for_system_user_without_manager_role(self):
 		email = frappe.mock("email")
 		create_test_user(email)
 		user = frappe.get_value("User", {"email": email}, "name")
 		frappe.db.set_value("User", user, "user_type", "System User")
 
-		self.assertTrue(is_system_manager(email))
+		self.assertFalse(is_system_manager(email))
 
 	def test_is_system_manager_returns_true_for_user_with_system_manager_role(self):
 		email = frappe.mock("email")
@@ -81,7 +81,7 @@ class TestUserUtils(FrappeTestCase):
 		frappe.db.set_value("User", user, "user_type", "System User")
 
 		frappe.set_user(email)
-		self.assertTrue(is_system_manager())
+		self.assertFalse(is_system_manager())
 
 	def test_as_administrator_restores_the_user_sid_and_data_of_the_session(self):
 		email = frappe.mock("email")

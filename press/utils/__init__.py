@@ -123,7 +123,7 @@ def get_current_team(get_doc=False) -> Team | str:
 			)
 		)
 
-	system_user = frappe.session.data.user_type == "System User"
+	system_user = _system_user()
 
 	# get team passed via request header
 	x_press_team = frappe.get_request_header("X-Press-Team")
@@ -198,7 +198,9 @@ def is_admin_user(team: str) -> bool:
 
 
 def _system_user():
-	return frappe.get_cached_value("User", frappe.session.user, "user_type") == "System User"
+	from press.utils.user import is_system_manager
+
+	return is_system_manager()
 
 
 def has_role(role, user=None):

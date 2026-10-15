@@ -41,6 +41,7 @@ from press.utils import (
 	get_current_team,
 	unique,
 )
+from press.utils.user import is_system_manager as is_press_operator
 
 if TYPE_CHECKING:
 	from press.press.doctype.app_source.app_source import AppSource
@@ -61,7 +62,7 @@ def new(bench):
 		frappe.throw("A bench group with this name already exists. Please choose a different name.")
 
 	if bench["server"] and not (
-		frappe.session.data.user_type == "System User"
+		is_press_operator()
 		or frappe.db.get_value("Server", bench["server"], "team") == team.name
 	):
 		# Keep this message generic — do not reveal anything about servers the

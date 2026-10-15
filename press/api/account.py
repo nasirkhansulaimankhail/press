@@ -39,6 +39,7 @@ from press.utils import otp as otp_purpose
 from press.utils import user as user_utils
 from press.utils.otp import OneTimePassword
 from press.utils.telemetry import capture
+from press.utils.user import is_system_manager as is_press_operator
 
 if TYPE_CHECKING:
 	from press.press.doctype.account_request.account_request import AccountRequest
@@ -942,7 +943,7 @@ def can_switch_to_team(team):
 @frappe.whitelist()
 def switch_team(team):
 	user_is_part_of_team = frappe.db.exists("Team Member", {"parent": team, "user": frappe.session.user})
-	user_is_system_user = frappe.session.data.user_type == "System User"
+	user_is_system_user = is_press_operator()
 	if user_is_part_of_team or user_is_system_user:
 		frappe.db.set_value("Team", {"user": frappe.session.user}, "last_used_team", team)
 		frappe.cache.delete_value("cached-account.get", user=frappe.session.user)

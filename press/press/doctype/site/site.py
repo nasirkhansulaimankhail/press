@@ -65,6 +65,7 @@ from press.press.doctype.site.site_plan_utils import (
 from press.saas.doctype.product_trial.product_trial import create_free_app_subscription
 from press.utils.jobs import has_job_timeout_exceeded
 from press.utils.telemetry import capture
+from press.utils.user import is_system_manager as is_press_operator
 from press.utils.webhook import create_webhook_event
 
 try:
@@ -76,7 +77,6 @@ except ImportError:
 
 from typing import TYPE_CHECKING
 
-from frappe.permissions import is_system_user
 from frappe.utils.password import get_decrypted_password
 
 from press.agent import Agent, AgentRequestSkippedException
@@ -111,6 +111,7 @@ from press.utils import (
 	validate_subdomain,
 )
 from press.utils.dns import _change_dns_record, check_dns_cname_a, create_dns_record
+from press.utils.user import is_system_manager as is_system_user
 
 if TYPE_CHECKING:
 	from frappe.types import DF
@@ -508,10 +509,7 @@ class Site(Document, TagHelpers):
 		def outer_wrapper(func):
 			@wraps(func)
 			def wrapper(inst, *args, **kwargs):
-				user_type = frappe.session.data.user_type or frappe.get_cached_value(
-					"User", frappe.session.user, "user_type"
-				)
-				if user_type == "System User":
+				if is_press_operator():
 					return func(inst, *args, **kwargs)
 				if has_support_access(inst.doctype, inst.name):
 					return func(inst, *args, **kwargs)

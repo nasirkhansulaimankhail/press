@@ -1,3 +1,6 @@
+import json
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import frappe
@@ -9,24 +12,9 @@ if TYPE_CHECKING:
 
 
 def execute():
-	User = frappe.qb.DocType("User")
 	HasRole = frappe.qb.DocType("Has Role")
-
-	# Get a list of users who don't have the "Press User" role, excluding "Administrator" and "Guest".
-	users = [
-		u.name
-		for u in (
-			frappe.qb.from_(User)
-			.left_join(HasRole)
-			.on((HasRole.parent == User.name) & (HasRole.role == "Press User"))
-			.where(HasRole.name.isnull())
-			.where(User.name != "Administrator")
-			.where(User.name != "Guest")
-			.select(User.name)
-			.distinct()
-			.run(as_dict=True)
-		)
-	]
+	preserve_original_roles()
+	users = eligible_users()
 
 	total = len(users)
 	chunk_size = 100
@@ -80,5 +68,55 @@ def execute():
 			role_doc.disabled = True
 			role_doc.save()
 
+	frappe.clear_cache()
 	# Commit changes.
 	frappe.db.commit()
+
+
+def eligible_users() -> list[str]:
+	"""Retain hosting access without promoting unrelated Desk or portal users."""
+	existing = set(
+		frappe.get_all(
+			"Has Role",
+			filters={"parenttype": "User", "role": ["in", ["Press Admin", "Press Member"]]},
+			pluck="parent",
+		)
+	)
+	teams = frappe.get_all("Team", filters={"enabled": 1}, fields=["name", "user"])
+	members = (
+		set(
+			frappe.get_all(
+				"Team Member",
+				filters={"parent": ["in", [team.name for team in teams]], "parenttype": "Team"},
+				pluck="user",
+			)
+		)
+		if teams
+		else set()
+	)
+	enabled = set(frappe.get_all("User", filters={"enabled": 1}, pluck="name"))
+	eligible = existing | ((members | {team.user for team in teams}) & enabled)
+	assigned = set(
+		frappe.get_all("Has Role", filters={"parenttype": "User", "role": "Press User"}, pluck="parent")
+	)
+	return sorted(eligible - assigned - {"Administrator", "Guest", None, ""})
+
+
+def preserve_original_roles():
+	"""Write the original assignments once, before any migration commits."""
+	path = Path(frappe.get_site_path("private", "press-role-migration-original.json"))
+	path.parent.mkdir(parents=True, exist_ok=True)
+	if path.exists():
+		return
+	data = {
+		"site": frappe.local.site,
+		"database": frappe.conf.db_name,
+		"roles": frappe.get_all("Has Role", fields=["*"]),
+		"legacy_role_states": frappe.get_all(
+			"Role", filters={"name": ["in", ["Press Admin", "Press Member"]]}, fields=["name", "disabled"]
+		),
+	}
+	with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as output:
+		json.dump(data, output, default=str)
+		output.flush()
+		os.fsync(output.fileno())

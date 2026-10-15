@@ -201,6 +201,7 @@ def is_restricted() -> bool:
 	team = get_current_team()
 	return (
 		roles_enabled()
+		and not skip_roles()
 		and not utils_user.is_system_manager()
 		and not is_team_owner(team)
 		and not is_admin_user(team)
@@ -254,3 +255,11 @@ def skip_roles() -> bool:
 		.get("roles_count")
 		== 0
 	)
+
+
+def permits_flag(key: str) -> bool:
+	"""Apply the same owner, administrator and relaxed policy as API guards."""
+	if not is_restricted():
+		return True
+	PressRole = frappe.qb.DocType("Press Role")
+	return bool(base_query().where(PressRole[key] == 1).run())

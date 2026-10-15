@@ -37,6 +37,7 @@ from press.utils.billing import (
 from press.utils.jobs import has_job_timeout_exceeded
 from press.utils.telemetry import capture, capture_pulse
 from press.utils.user import is_system_manager
+from press.utils.user import is_system_manager as is_press_operator
 
 from .team_members import get_invitations, get_roles
 
@@ -1218,7 +1219,7 @@ class Team(Document):
 	@dashboard_whitelist()
 	@rate_limit(limit=10, seconds=60 * 60)
 	def invite_team_member(self, email, roles=None):
-		from frappe.utils.user import is_system_user
+		from press.utils.user import is_system_manager as is_system_user
 
 		PressRole = frappe.qb.DocType("Press Role")
 		PressRoleUser = frappe.qb.DocType("Press Role User")
@@ -1969,8 +1970,7 @@ def get_permission_query_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	user_type = frappe.db.get_value("User", user, "user_type", cache=True)
-	if user_type == "System User":
+	if is_press_operator(user):
 		return ""
 
 	team = get_current_team()
@@ -1984,9 +1984,15 @@ def has_permission(doc, ptype, user):
 	if not user:
 		user = frappe.session.user
 
-	user_type = frappe.db.get_value("User", user, "user_type", cache=True)
-	if user_type == "System User":
+	if is_press_operator(user):
 		return True
+
+	from press.access.resource_permissions import permits_team_management
+
+	if user != frappe.session.user:
+		return False
+	if ptype in ("write", "create", "delete"):
+		return permits_team_management(doc.name, user)
 
 	team = get_current_team(True)
 	child_team_members = [d.name for d in frappe.db.get_all("Team", {"parent_team": team.name}, ["name"])]

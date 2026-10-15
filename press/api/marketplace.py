@@ -23,6 +23,7 @@ from press.press.doctype.marketplace_app.marketplace_app import (
 )
 from press.utils import docs, get_app_tag, get_current_team, get_last_doc, is_user_part_of_team, unique
 from press.utils.billing import get_frappe_io_connection
+from press.utils.user import is_system_manager as is_press_operator
 
 if TYPE_CHECKING:
 	from press.marketplace.doctype.marketplace_app_plan.marketplace_app_plan import MarketplaceAppPlan
@@ -919,7 +920,7 @@ def get_apps_with_plans(apps: list[str], release_group: str):
 def change_app_plan(subscription: str, new_plan: str):
 	team = get_current_team(get_doc=True)
 	subscription_doc = frappe.get_doc("Subscription", subscription)
-	if subscription_doc.team != team.name and frappe.session.data.user_type != "System User":
+	if subscription_doc.team != team.name and not is_press_operator():
 		frappe.throw("Not Permitted", frappe.PermissionError)
 
 	plan = frappe.db.get_value("Marketplace App Plan", new_plan, ["app", "price_usd"], as_dict=True)
@@ -1066,7 +1067,7 @@ def update_app_plan(app_plan_name: str, updated_plan_data: dict):
 		frappe.throw("Please enter a title for the plan.")
 
 	app_plan_doc = frappe.get_doc("Marketplace App Plan", app_plan_name)
-	if frappe.session.data.user_type != "System User":
+	if not is_press_operator():
 		app_team = frappe.db.get_value("Marketplace App", app_plan_doc.app, "team")
 		if app_team != get_current_team():
 			frappe.throw("Not Permitted", frappe.PermissionError)
@@ -1367,7 +1368,7 @@ def _validate_app_audit_access(app: str) -> None:
 	current_team = get_current_team()
 	app_team = frappe.db.get_value("Marketplace App", app, "team")
 	# for impersonation, the session user needs to have system user role, in that case we allow seeing other audit reports.
-	if not is_desk_user(frappe.session.user):  # noqa: SIM102 - nested if makes the logic more readable.
+	if not is_press_operator():  # noqa: SIM102 - nested if makes the logic more readable.
 		# not permitted to get the audit report if user is not a member of the team of the marketplace app
 		if app_team != current_team and not is_user_part_of_team(frappe.session.user, app_team):
 			frappe.throw(

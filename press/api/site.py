@@ -19,7 +19,6 @@ from frappe.utils import cint, flt, sbool, time_diff_in_hours
 from frappe.utils.data import format_datetime, get_datetime
 from frappe.utils.password import get_decrypted_password
 from frappe.utils.typing_validations import validate_argument_types
-from frappe.utils.user import is_system_user
 from pypika.terms import ValueWrapper
 
 from press.access.support_access import has_support_access
@@ -33,8 +32,8 @@ from press.press.doctype.marketplace_app.marketplace_app import (
 from press.press.doctype.remote_file.remote_file import get_remote_key, validate_files_belong_to_team
 from press.press.doctype.root_domain.root_domain import (
 	get_default_domain_for_team,
-	validate_team_domain,
 	get_matching_domain,
+	validate_team_domain,
 )
 from press.press.doctype.server.server import is_dedicated_server
 from press.press.doctype.site.site import (
@@ -60,6 +59,7 @@ from press.utils import (
 	unique,
 )
 from press.utils.dns import check_dns_cname_a
+from press.utils.user import is_system_manager as is_press_operator
 
 if TYPE_CHECKING:
 	from press.press.doctype.bench.bench import Bench
@@ -88,12 +88,7 @@ def protected(doctypes):
 
 	@wrapt.decorator
 	def wrapper(wrapped, instance, args, kwargs):
-		user_type = frappe.session.data.user_type or frappe.get_cached_value(
-			"User", frappe.session.user, "user_type"
-		)
-
-		# System users have access to all endpoints.
-		if user_type == "System User":
+		if is_press_operator():
 			return wrapped(*args, **kwargs)
 
 		# Get the name of the document being accessed.
@@ -422,7 +417,7 @@ def validate_plan(server: str, site: str, new_plan: str, is_new: bool = False) -
 		as_dict=True,
 	)
 
-	is_system_user = frappe.session.data.user_type == "System User"
+	is_system_user = is_press_operator()
 
 	_validate_warranty_change(
 		is_new,
@@ -440,7 +435,7 @@ def validate_plan(server: str, site: str, new_plan: str, is_new: bool = False) -
 	if _is_free_dedicated_plan_allowed(server, new_site_plan):
 		return
 
-	if frappe.session.data.user_type == "System User":
+	if is_press_operator():
 		return
 
 	frappe.throw("You are not allowed to use this plan")  # nosemgrep
@@ -1646,7 +1641,7 @@ def get_plans(name=None, rg=None):
 		release_group_name = rg if rg else frappe.db.get_value("Site", site_name, "group")
 		release_group = frappe.get_doc("Release Group", release_group_name)
 		is_private_bench = release_group.team == team and not release_group.public
-		is_system_user = frappe.db.get_value("User", frappe.session.user, "user_type") == "System User"
+		is_system_user = is_press_operator()
 		# poor man's bench paywall
 		# this will not allow creation of $10 sites on private benches
 		# wanted to avoid adding a new field, so doing this with a date check :)
@@ -1798,7 +1793,7 @@ def get(name):
 	rg_info = frappe.db.get_value("Release Group", site.group, ["team", "version", "public"], as_dict=True)
 	group_team = rg_info.team
 	frappe_version = rg_info.version
-	group_name = site.group if group_team == team or is_system_user(frappe.session.user) else None
+	group_name = site.group if group_team == team or is_press_operator() else None
 
 	server = frappe.db.get_value(
 		"Server",
@@ -2150,7 +2145,7 @@ def current_plan(name):
 		"total_database_usage": total_database_usage,
 		"total_storage_usage": total_storage_usage,
 		"database_access": plan.database_access if plan else None,
-		"monitor_access": (is_system_user(frappe.session.user) or (plan.monitor_access if plan else None)),
+		"monitor_access": (is_press_operator() or (plan.monitor_access if plan else None)),
 		"usage_in_percent": {
 			"cpu": site.current_cpu_usage,
 			"disk": site.current_disk_usage,
@@ -2906,7 +2901,7 @@ def check_app_compatibility_for_upgrade(name, version):
 	Check which apps in the current site are compatible with the next Frappe version.
 	Returns list of custom apps installed on the site, if any and other custom apps in the release group for selecting a compatible branch.
 	"""
-	from press.api.version_upgrade import get_next_version, _check_public_apps_compatibility
+	from press.api.version_upgrade import _check_public_apps_compatibility, get_next_version
 
 	next_version = get_next_version(version)
 	site_group = frappe.db.get_value("Site", name, "group")
@@ -3004,13 +2999,12 @@ def create_private_bench_for_site_upgrade(
 	"""
 	Deploy private release group and schedule version upgrade.
 	"""
-	from press.press.doctype.release_group.release_group import new_release_group
-
 	from press.api.version_upgrade import (
-		get_next_version,
-		get_compatible_public_apps_and_sources,
 		_get_apps_for_version_upgrade,
+		get_compatible_public_apps_and_sources,
+		get_next_version,
 	)
+	from press.press.doctype.release_group.release_group import new_release_group
 
 	next_version = get_next_version(version)
 	site_group, site_server = frappe.db.get_value("Site", name, ["group", "server"])

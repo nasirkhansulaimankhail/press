@@ -13,6 +13,7 @@ from frappe.utils import cint
 from press.access.support_access import has_support_access
 from press.runner import constants
 from press.utils import _get_current_team, _system_user
+from press.utils.user import is_system_manager as is_press_operator
 
 
 @frappe.whitelist()
@@ -120,17 +121,18 @@ def has_permission(doc, ptype, user):
 	if not user:
 		user = frappe.session.user
 
-	user_type = frappe.db.get_value("User", user, "user_type", cache=True)
-	if user_type == "System User":
+	if is_press_operator(user):
 		return True
 
-	if ptype == "create":
-		return True
+	if user != frappe.session.user:
+		return False
+
+	from press.access.resource_permissions import permits_document
 
 	team = get_current_team()
 	child_team_members = [d.name for d in frappe.db.get_all("Team", {"parent_team": team}, ["name"])]
 	if doc.team == team or doc.team in child_team_members:
-		return True
+		return permits_document(doc, ptype)
 
 	if has_support_access(doc.doctype, doc.name):
 		return True
@@ -144,13 +146,14 @@ def get_permission_query_conditions_for_doctype_and_user(doctype, user):
 	if not user:
 		user = frappe.session.user
 
-	user_type = frappe.db.get_value("User", user, "user_type", cache=True)
-	if user_type == "System User":
+	if is_press_operator(user):
 		return ""
 
 	team = get_current_team()
 
-	return f"(`tab{doctype}`.`team` = {frappe.db.escape(team)})"
+	from press.access.resource_permissions import scope_condition
+
+	return scope_condition(doctype, team)
 
 
 def get_permission_query_conditions_for_doctype(doctype):

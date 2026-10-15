@@ -8,10 +8,10 @@ from frappe.query_builder import Case
 from frappe.query_builder.functions import Count, Sum
 from frappe.utils import flt
 from frappe.utils.data import add_days, add_months, get_first_day, get_last_day, today
-from frappe.utils.user import is_system_user
 
 from press.guards import role_guard
 from press.utils import get_current_team
+from press.utils.user import is_system_manager as is_system_user
 
 
 def is_lead_team(lead: str) -> bool:
