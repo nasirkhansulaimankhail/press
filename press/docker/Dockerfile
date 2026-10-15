@@ -341,6 +341,12 @@ RUN --mount=type=bind,source=app_updates/{{ app.app }},target=/home/frappe/conte
 {% endfor %}
 
 
+# Per-app installation can replace dependencies required by another app.
+RUN --mount=type=cache,sharing=locked,target=/home/frappe/.cache,uid=1000,gid=1000 \
+  /home/frappe/frappe-bench/env/bin/python -m pip install{% for app in doc.apps %} \
+  --editable /home/frappe/frappe-bench/apps/{{ app.app }}{% endfor %} \
+  && /home/frappe/frappe-bench/env/bin/python -m pip check
+
 COPY --chown=frappe:frappe config /home/frappe/frappe-bench/config
 COPY --chown=frappe:frappe apps.txt /home/frappe/frappe-bench/sites/apps.txt
 
