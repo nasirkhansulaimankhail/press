@@ -1,0 +1,2 @@
+# Separate Python 3.11 tooling environment; Marketplace audit_bench_path points to its parent.
+semgrep==1.159.0

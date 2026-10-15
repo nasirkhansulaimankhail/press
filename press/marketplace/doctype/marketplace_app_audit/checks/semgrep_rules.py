@@ -87,6 +87,8 @@ def run_semgrep_rules(clone_dir: str) -> list[CheckResult]:
 	cmd = [
 		*prefix,
 		"scan",
+		"--metrics=off",
+		"--disable-version-check",
 		"--config",
 		str(RULES_DIR.resolve()),
 		"--json",

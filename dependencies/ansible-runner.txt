@@ -1,0 +1,6 @@
+# Separate Python 3.10 runtime selected by press_ansible_runner_python.
+ansible==3.4.0
+paramiko==3.3.1
+Jinja2==3.0.3
+MarkupSafe==2.1.5
+cryptography==43.0.3

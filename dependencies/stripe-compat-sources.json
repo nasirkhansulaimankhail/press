@@ -1,0 +1,12 @@
+{
+  "stripe": {
+    "version": "2.56.0",
+    "url": "https://files.pythonhosted.org/packages/6f/bf/956474f5b4a879b88ef8fffb93c248082682522274828a05f362f422cebe/stripe-2.56.0-py2.py3-none-any.whl",
+    "sha256": "6c685eeadf9e3608315b6d84b4f5f2da2909179b65633ce20f296be22ed21a98"
+  },
+  "six": {
+    "version": "1.17.0",
+    "url": "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl",
+    "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+  }
+}

@@ -2,8 +2,13 @@
 # For license information, please see license.txt
 
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 import frappe
 import telegram
+from telegram.constants import MessageLimit, ParseMode
+from telegram.request import HTTPXRequest
 
 from press.utils import log_error
 
@@ -30,15 +35,9 @@ class Telegram:
 		if not message:
 			return None
 		try:
-			text = message[: telegram.MAX_MESSAGE_LENGTH]
+			text = message[: MessageLimit.MAX_TEXT_LENGTH]
 			parse_mode = self._get_parse_mode(html)
-			return self.bot.send_message(
-				chat_id=self.chat_id,
-				text=text,
-				parse_mode=parse_mode,
-				message_thread_id=self.topic_id,
-				timeout=3,
-			)
+			return self._run_async(self._send(text, parse_mode))
 		except Exception:
 			if reraise:
 				raise
@@ -52,12 +51,49 @@ class Telegram:
 
 	def _get_parse_mode(self, html):
 		if html:
-			return telegram.ParseMode.HTML
-		return telegram.ParseMode.MARKDOWN
+			return ParseMode.HTML
+		return ParseMode.MARKDOWN
+
+	@staticmethod
+	def _run_async(coroutine):
+		# Press callers are synchronous. Keep that contract even when called
+		# from a thread that already owns an event loop.
+		try:
+			asyncio.get_running_loop()
+		except RuntimeError:
+			return asyncio.run(coroutine)
+		with ThreadPoolExecutor(max_workers=1) as executor:
+			return executor.submit(asyncio.run, coroutine).result()
+
+	async def _send(self, text, parse_mode):
+		async with self.bot as bot:
+			return await bot.send_message(
+				chat_id=self.chat_id,
+				text=text,
+				parse_mode=parse_mode,
+				message_thread_id=self.topic_id,
+				read_timeout=3,
+				write_timeout=3,
+				connect_timeout=3,
+				pool_timeout=3,
+			)
+
+	async def _get_bot_username(self):
+		async with self.bot as bot:
+			return bot.username
 
 	@property
 	def bot(self):
-		return telegram.Bot(token=self.token)
+		return telegram.Bot(
+			token=self.token,
+			request=HTTPXRequest(
+				connection_pool_size=1,
+				read_timeout=3,
+				write_timeout=3,
+				connect_timeout=3,
+				pool_timeout=3,
+			),
+		)
 
 	def respond(self, message):
 		if not message:
@@ -82,7 +118,7 @@ class Telegram:
 
 		mention = text[begin:end]
 		# Only respond to messages mentioning the bot
-		if mention != f"@{self.bot.username}":
+		if mention != f"@{self._run_async(self._get_bot_username())}":
 			return
 
 		command = text.replace(mention, "")
