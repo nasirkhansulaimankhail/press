@@ -15,7 +15,27 @@
   changed_when: false
 
 - name: Setup Filebeat Indexes
-  command: filebeat setup -e -E setup.ilm.overwrite=true -E 'output.elasticsearch.hosts=["localhost:9200"]' -E output.elasticsearch.path="/" -E output.elasticsearch.protocol=http --index-management
+  command: filebeat setup -e -E setup.ilm.overwrite=false -E 'output.elasticsearch.hosts=["localhost:9200"]' -E output.elasticsearch.path="/" -E output.elasticsearch.protocol=http --index-management
+
+- name: Apply Analytics Log Retention
+  uri:
+    url: http://localhost:9200/_ilm/policy/filebeat
+    method: PUT
+    body_format: json
+    body:
+      policy:
+        phases:
+          hot:
+            min_age: 0ms
+            actions:
+              rollover:
+                max_age: 1d
+                max_size: 5gb
+          delete:
+            min_age: 30d
+            actions:
+              delete:
+                delete_searchable_snapshot: true
 
 - name: Setup Filebeat Ingest Pipelines
   command: filebeat setup -e --pipelines --modules nginx,system,mysql
