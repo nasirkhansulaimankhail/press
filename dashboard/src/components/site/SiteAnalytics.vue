@@ -526,7 +526,7 @@ import { h } from 'vue'
 import { toast } from 'vue-sonner'
 import BarChart from '@/components/charts/BarChart.vue'
 import LineChart from '@/components/charts/LineChart.vue'
-import dayjs, { dayjsFloorToMinutes } from '../../utils/dayjs'
+import dayjs from '../../utils/dayjs'
 import { initialAnalyticsRange } from '@/utils/analyticsDateRange'
 import ActionButton from '../ActionButton.vue'
 import AlertBanner from '../AlertBanner.vue'
@@ -1021,8 +1021,8 @@ export default {
 		duration(newValue) {
 			if (!newValue) return
 			this.now = dayjs()
-			// floor to 15 minutes to avoid issues with caching
-			const flooredEndDate = dayjsFloorToMinutes(this.now, 15)
+			// Keep the current minute visible while sharing per-minute cache keys.
+			const flooredEndDate = this.now.startOf('minute')
 			const int = parseInt(newValue.slice(0, -1))
 			const unit = newValue.slice(-1)
 			this.setDateRange(flooredEndDate.subtract(int, unit), flooredEndDate)
