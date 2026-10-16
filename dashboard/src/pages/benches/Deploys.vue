@@ -7,13 +7,13 @@ import {
 	Select,
 	Tooltip,
 } from 'frappe-ui'
-import { defineAsyncComponent, h, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, defineAsyncComponent, h } from 'vue'
 import { toast } from 'vue-sonner'
 import Scrollbar from '@/components/common/Scrollbar.vue'
 import { renderDialog } from '@/utils/components'
 import { date, duration } from '@/utils/format'
 import { pollReleasePipelineValidationStatus } from '@/utils/pollReleasePipeline'
+import { deploymentRows } from '@/utils/deploymentRows'
 
 interface Props {
 	name?: string
@@ -31,9 +31,9 @@ const deployBuilds = createListResource({
 	fields: ['name', 'status', 'creation', 'build_duration', 'owner'],
 	filters: {
 		group: props.name,
-		creation: ['<=', '2026-04-21 23:49:24'],
 	},
 	orderBy: 'creation desc',
+	auto: true,
 })
 
 const pipelines = createListResource({
@@ -43,6 +43,7 @@ const pipelines = createListResource({
 		release_group: props.name,
 	},
 	orderBy: 'creation desc',
+	auto: true,
 })
 
 const badgeThemes = {
@@ -51,6 +52,8 @@ const badgeThemes = {
 	Failure: 'red',
 	Pending: 'yellow',
 	Preparing: 'yellow',
+	Retrying: 'yellow',
+	'Partial Success': 'yellow',
 }
 
 const statusOptions = [
@@ -60,27 +63,32 @@ const statusOptions = [
 	'Pending',
 	'Preparing',
 	'Running',
+	'Retrying',
+	'Partial Success',
 	'Success',
 	'Failure',
 ]
 
-const route = useRoute()
-const mode = ref(route.query.pipeline === 'false' ? 'older' : 'newer')
-
-watch(
-	mode,
-	(x) => {
-		if (x === 'newer') {
-			pipelines.fetch()
-		} else deployBuilds.fetch()
-	},
-	{ immediate: true },
+const deployments = computed(() =>
+	deploymentRows(deployBuilds.data || [], pipelines.data || []),
 )
 
+function refreshDeployments() {
+	deployBuilds.reload()
+	pipelines.reload()
+}
+
 const handleStatusChange = (status: string) => {
-	const resObj = mode?.value === 'newer' ? pipelines : deployBuilds
-	resObj.filters.status = status
-	resObj.reload()
+	for (const resource of [deployBuilds, pipelines]) {
+		if (status) resource.filters.status = status
+		else delete resource.filters.status
+		resource.reload()
+	}
+}
+
+function loadMoreDeployments() {
+	if (deployBuilds.hasNextPage) deployBuilds.next()
+	if (pipelines.hasNextPage) pipelines.next()
 }
 
 function handleDeploy() {
@@ -113,29 +121,14 @@ function handleDeploy() {
 
 <template>
 	<div class="flex items-center gap-2 mb-3">
-		<Button @click="mode = 'newer'" v-if="mode == 'older'">
-			<template #icon>
-				<LucideChevronLeft class="size-4" />
-			</template>
-		</Button>
-
-		<div class="font-medium" v-if='mode == "older"'>Older Deploys</div>
-
 		<Select
 			:options="statusOptions"
 			@update:modelValue="handleStatusChange"
 			placeholder="Select Status"
-			class="max-w-[130px]"
-			:class="mode == 'newer'? 'mr-auto' : 'ml-auto'"
+			class="max-w-[130px] mr-auto"
 		/>
 
-		<Button @click="mode = 'older'" v-if="mode == 'newer'">
-			<LucideHistory class="size-4" />
-		</Button>
-
-		<Button
-			@click="mode == 'older' ? deployBuilds.reload() : pipelines.reload()"
-		>
+		<Button @click="refreshDeployments">
 			<lucide-refresh-ccw class="size-4" />
 		</Button>
 
@@ -154,12 +147,9 @@ function handleDeploy() {
 					<div class="rounded-l table-cell">Deploy</div>
 					<div class="table-cell">Status</div>
 
-					<template v-if="mode === 'older'">
-						<div class="table-cell">Duration</div>
-						<div class="table-cell rounded-r">Deployed By</div>
-					</template>
-
-					<div class="table-cell rounded-r" v-else>Deployed By</div>
+					<div class="table-cell">Type</div>
+					<div class="table-cell">Duration</div>
+					<div class="table-cell rounded-r">Deployed By</div>
 				</div>
 			</div>
 
@@ -167,10 +157,10 @@ function handleDeploy() {
 
 			<div class="table-row-group">
 				<router-link
-					v-for="item in mode == 'older' ? deployBuilds.data : pipelines.data"
-					:key="item.name"
+					v-for="item in deployments"
+					:key="`${item.routeName}:${item.name}`"
 					class="hover:bg-surface-gray-1 table-row *:border-b"
-					:to="{name: mode=='older' ?'Deploy Candidate':'Release Pipeline', params: {id: item.name,name }}"
+					:to="{ name: item.routeName, params: { id: item.name, name } }"
 					role="row"
 				>
 					<div class="whitespace-nowrap table-cell hover:rounded-l" role="cell">
@@ -187,16 +177,11 @@ function handleDeploy() {
 						</Badge>
 					</div>
 
-					<template v-if="mode === 'older'">
-						<div class="table-cell" role="cell">
-							{{ duration(item.build_duration) }}
-						</div>
-						<div class="table-cell hover:rounded-r" role="cell">
-							{{ item.owner }}
-						</div>
-					</template>
-
-					<div role="cell" class="table-cell" v-else>{{ item.owner }}</div>
+					<div class="table-cell" role="cell">{{ item.kind }}</div>
+					<div class="table-cell" role="cell">
+						{{ item.build_duration == null ? '—' : duration(item.build_duration) }}
+					</div>
+					<div class="table-cell hover:rounded-r" role="cell">{{ item.owner }}</div>
 				</router-link>
 			</div>
 		</div>
@@ -204,9 +189,9 @@ function handleDeploy() {
 
 	<div class="w-full flex">
 		<Button
-			v-if="mode == 'older'? deployBuilds.hasNextPage : pipelines.hasNextPage "
+			v-if="deployBuilds.hasNextPage || pipelines.hasNextPage"
 			class="ml-auto mt-3"
-			@click="mode == 'older'? deployBuilds.next() : pipelines.next()"
+			@click="loadMoreDeployments"
 		>
 			Load more
 		</Button>
