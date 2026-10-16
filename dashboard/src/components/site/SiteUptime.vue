@@ -7,7 +7,7 @@
 			<LoadingText />
 		</div>
 		<div
-			v-else-if="!data || data[0].date === undefined"
+			v-else-if="!data?.length || !filteredData.length"
 			class="flex h-5/6 items-center justify-center w-full"
 		>
 			<NoDataMsg />
@@ -205,7 +205,10 @@ export default {
 		},
 		filteredData() {
 			if (!this.data?.length) return []
-			const filtered = this.data.filter((obj) => typeof obj.value == 'number')
+			const filtered = this.data.filter((obj) =>
+				Number.isFinite(obj.value) && obj.value >= 0 && obj.value <= 1 &&
+				dayjs(obj.date).isValid() && !dayjs(obj.date).isAfter(dayjs()),
+			)
 			this.chunkSize = this.getOptimalChunkSizeFromDataLength(filtered.length)
 			return filtered
 		},

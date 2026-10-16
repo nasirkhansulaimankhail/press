@@ -527,6 +527,7 @@ import { toast } from 'vue-sonner'
 import BarChart from '@/components/charts/BarChart.vue'
 import LineChart from '@/components/charts/LineChart.vue'
 import dayjs, { dayjsFloorToMinutes } from '../../utils/dayjs'
+import { initialAnalyticsRange } from '@/utils/analyticsDateRange'
 import ActionButton from '../ActionButton.vue'
 import AlertBanner from '../AlertBanner.vue'
 import AnalyticsCard from './AnalyticsCard.vue'
@@ -575,15 +576,9 @@ export default {
 		}
 	},
 	mounted() {
-		// Initialize date range from URL if present
-		const start = dayjs(this.$route.query.start)
-		const end = dayjs(this.$route.query.end)
-		if (start.isValid && end.isValid && start.isBefore(end)) {
-			this.updateStartDate(start)
-			this.updateEndDate(end)
-		} else {
-			this.applyDefaultDateRange()
-		}
+		const range = initialAnalyticsRange(this.$route.query)
+		this.setDateRange(range.start, range.end)
+		if (range.defaulted) this.duration = this.defaultDuration
 
 		// Highlight card if element hash found in URL
 		if (typeof this.$route.hash === 'string') {
@@ -903,8 +898,8 @@ export default {
 
 			this._zoomTimeout = setTimeout(() => {
 				const { startDate, endDate } = evt
-				this.updateStartDate(startDate)
-				this.updateEndDate(endDate)
+				this.resetDurationField()
+				this.setDateRange(startDate, endDate)
 			}, 500) // debounce
 		},
 		dateFormatter(dateString) {
@@ -918,7 +913,23 @@ export default {
 		resetDurationField(value = null) {
 			this.duration = value
 		},
+		setDateRange(start, end) {
+			this.inputStartDate = dayjs(start)
+			this.inputEndDate = dayjs(end)
+			if (!this.validateDateRange()) {
+				this.dateRangeError = 'Start must be earlier than end'
+				return
+			}
+			this.resetDateRangeError()
+			this.syncLogicalDateRange()
+			if (this.allowTimestampSyncToUrl) {
+				this.$router.replace({ query: { ...this.$route.query,
+					start: this.inputStartDate.toISOString(), end: this.inputEndDate.toISOString() } })
+			}
+		},
 		applyDefaultDateRange() {
+			const range = initialAnalyticsRange({})
+			this.setDateRange(range.start, range.end)
 			this.duration = this.defaultDuration
 		},
 		syncLogicalDateRange() {
@@ -926,7 +937,7 @@ export default {
 			this.logicalEndDate = this.inputEndDate
 		},
 		validateDateRange(start = this.inputStartDate, end = this.inputEndDate) {
-			return dayjs(start).isBefore(dayjs(end))
+			return dayjs(start).isValid() && dayjs(end).isValid() && dayjs(start).isBefore(dayjs(end))
 		},
 		updateStartDate(newStartDate, resetDuration = true) {
 			this.resetDateRangeError()
@@ -1012,10 +1023,9 @@ export default {
 			this.now = dayjs()
 			// floor to 15 minutes to avoid issues with caching
 			const flooredEndDate = dayjsFloorToMinutes(this.now, 15)
-			this.updateEndDate(flooredEndDate, false)
 			const int = parseInt(newValue.slice(0, -1))
 			const unit = newValue.slice(-1)
-			this.updateStartDate(dayjs(this.inputEndDate).subtract(int, unit), false)
+			this.setDateRange(flooredEndDate.subtract(int, unit), flooredEndDate)
 		},
 	},
 }

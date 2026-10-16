@@ -6,6 +6,7 @@ from __future__ import annotations
 import math
 from contextlib import suppress
 from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, Final, TypedDict, cast
 
@@ -1116,24 +1117,18 @@ def get_uptime(site: str, timezone: str, start: datetime, end: datetime, timegra
 	url = f"https://{monitor_server}/prometheus/api/v1/query_range"
 	password = get_decrypted_password("Monitor Server", monitor_server, "grafana_password")
 
-	# if the difference is more than 30 day, set timegrain to 1 day
+	# Never query future periods or invent failures where probes are missing.
+	end = min(end, datetime.now(datetime_timezone.utc))
+	if start >= end:
+		return []
 	if (end - start).days >= 30:
 		timegrain = 86400
-		# align to beginning of day of start date
-		start = start.astimezone(pytz_timezone(timezone)).replace(hour=0, minute=0, second=0, microsecond=0)
-		# align to end of day of end date
-		end = end.astimezone(pytz_timezone(timezone)).replace(
-			hour=0, minute=0, second=0, microsecond=0
-		) + timedelta(days=1)
-
-	# if the difference is less than an hour, set timegrain to 1 min
-	elif int((end - start).total_seconds()) < 60 * 60:
+	elif (end - start).total_seconds() < 3600:
 		timegrain = 60
-		start, end = align_to_quarter_hour(start, end, timezone)
 
 	query: dict[str, str | float] = {
 		"query": (
-			f'avg_over_time(probe_success{{job="site", instance="{site}"}}[{timegrain}s]) or on() vector(0)'
+			f'avg_over_time(probe_success{{job="site", instance="{site}"}}[{timegrain}s])'
 		),
 		"start": start.timestamp(),
 		"end": end.timestamp(),
@@ -1146,7 +1141,12 @@ def get_uptime(site: str, timezone: str, start: datetime, end: datetime, timegra
 	if not response["data"]["result"]:
 		return []
 	for timestamp, value in sorted(
-		{ts: val for r in response["data"]["result"] for ts, val in r["values"]}.items()
+		{
+			ts: val
+			for r in response["data"]["result"]
+			for ts, val in r["values"]
+			if start.timestamp() <= ts <= end.timestamp() and math.isfinite(float(val))
+		}.items()
 	):
 		buckets.append(
 			frappe._dict(
